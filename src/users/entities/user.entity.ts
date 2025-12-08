@@ -1,6 +1,7 @@
-import { Column, Entity, OneToOne, PrimaryGeneratedColumn } from "typeorm";
+import { Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, OneToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { Student } from "./student.entity";
 import { Teacher } from "./teacher.entity";
+import { Role } from "src/roles/entities/role.entity";
 
 @Entity('users')
 export class User {
@@ -28,12 +29,12 @@ export class User {
   @Column({ nullable: true })
   avatar?: string;
 
-//   @ManyToOne(() => Role, (role) => role.users)
-//   @JoinColumn({ name: 'role_id' })
-//   role: Role;
+  @ManyToOne(() => Role, (role) => role.users)
+  @JoinColumn({ name: 'role_id' })
+  role: Role;
 
-  // @Column()
-  // role_id: number;
+  @Column()
+  role_id: number;
 
   @Column({ default: true })
   isActive: boolean;
@@ -43,4 +44,23 @@ export class User {
 
   @OneToOne(() => Teacher, (teacher) => teacher.user)
   teacher?: Teacher;
+
+  /** Column Token */
+  @Column({ nullable: true })
+  refreshToken: string;
+
+  @Column({ nullable: true })
+  codeID: number;
+
+  @Column({ type: 'timestamp', nullable: true })
+  codeExpired: Date;
+
+  @CreateDateColumn({ type: 'timestamp' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ type: 'timestamp' })
+  updatedAt: Date;
+
+  @DeleteDateColumn({ type: 'timestamp', nullable: true })
+  deletedAt: Date;
 }

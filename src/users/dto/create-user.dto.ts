@@ -20,7 +20,8 @@ export class CreateUserDto {
   @IsOptional()
   phone?: string;
 
-  role: 'ADMIN' | 'STUDENT' | 'TEACHER';
+  @IsNumber()
+  role: number;
 
   // Cho STUDENT
 
