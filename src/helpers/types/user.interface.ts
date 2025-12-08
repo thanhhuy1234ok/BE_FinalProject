@@ -1,10 +1,10 @@
-// import { Role } from 'src/roles/entities/role.entity';
+import { Role } from 'src/roles/entities/role.entity';
 
 export interface IUser {
-  id: number;
+  id: string;
   name: string;
   email: string;
-  // role: Role;
+  role_id: number;
   avatar: string;
   // permissions?: Permission[];
 }
