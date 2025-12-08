@@ -8,16 +8,19 @@ import { Repository } from 'typeorm';
 @Injectable()
 export class UsersService {
   constructor(
-      @InjectRepository(User)
-    private readonly usersRepository: Repository<User>
+    @InjectRepository(User)
+    private readonly usersRepository: Repository<User>,
   ) {}
-  create(createUserDto: CreateUserDto) {
-    const checkEmail = this.usersRepository.findOne({where:{email:createUserDto.email}});
+  async create(createUserDto: CreateUserDto) {
+    const checkEmail = await this.usersRepository.findOne({
+      where: { email: createUserDto.email },
+    });
+
 
     if (checkEmail) {
       throw new BadRequestException('Email already exists');
     }
-    const user = this.usersRepository.create({...createUserDto});
+    const user = this.usersRepository.create({ ...createUserDto });
     return this.usersRepository.save(user);
   }
 
@@ -35,5 +38,9 @@ export class UsersService {
 
   remove(id: number) {
     return `This action removes a #${id} user`;
+  }
+
+  findOneByUsername(username: string) {
+    return this.usersRepository.findOne({ where: { email: username } });
   }
 }
