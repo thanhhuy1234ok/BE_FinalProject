@@ -23,17 +23,15 @@ export class AuthService {
   async validateUser(username: string, pass: string): Promise<any> {
     const user = await this.usersService.findOneByUsername(username);
     if (user) {
-      // const isValid = isValidPassword(pass, user.password);
-      const isValid = pass === user.password ? true : false;
- 
+      const isValid = await isValidPassword(pass, user.password);
       if (isValid === true) {
         // const userRole = user.role;
         // const temp = await this.rolesService.findOne(userRole.id);
-        const objUser = {
-          ...user,
-          // permissions: temp?.permissions ?? [],
-        }
-        return objUser;
+        // const objUser = {
+        //   ...user,
+        //   // permissions: temp?.permissions ?? [],
+        // }
+        return user;
       }
     }
 
