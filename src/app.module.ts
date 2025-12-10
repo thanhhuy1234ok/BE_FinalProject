@@ -8,6 +8,7 @@ import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { RolesModule } from './roles/roles.module';
 import { MajorsModule } from './majors/majors.module';
+import { YearOfAdmissionModule } from './year-of-admission/year-of-admission.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { MajorsModule } from './majors/majors.module';
     UsersModule,
     RolesModule,
     MajorsModule,
+    YearOfAdmissionModule,
   ],
   controllers: [AppController],
   providers: [AppService],
