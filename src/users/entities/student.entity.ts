@@ -1,6 +1,7 @@
 import { Column, Entity, JoinColumn, ManyToOne, OneToOne, PrimaryColumn,  } from "typeorm";
 import { User } from "./user.entity";
 import { Major } from "src/majors/entities/major.entity";
+import { YearOfAdmission } from "src/year-of-admission/entities/year-of-admission.entity";
 
 @Entity('students')
 export class Student {
@@ -35,11 +36,8 @@ export class Student {
   // @JoinColumn({ name: 'class_id' })
   // classEntity: ClassEntity;
 
-  // // YEAR OF ADMISSION
-  // @Column()
-  // yearOfAdmissionId: number;
 
-  // @ManyToOne(() => YearOfAdmission, (y) => y.students)
-  // @JoinColumn({ name: 'yearOfAdmissionId' })
-  // yearOfAdmission: YearOfAdmission;
+  @ManyToOne(() => YearOfAdmission, (y) => y.students)
+  @JoinColumn({ name: 'yearOfAdmissionId' })
+  yearOfAdmission: YearOfAdmission;
 }
