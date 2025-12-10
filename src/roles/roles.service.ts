@@ -25,7 +25,7 @@ export class RolesService {
       throw new BadRequestException(`${name} đã tồn tại`);
     }
     const newRole = await this.roleRepository.create({
-      name,
+      name: name.toLocaleLowerCase(),
       description,
       isActive,
       // permissions: permissionsEntities,
