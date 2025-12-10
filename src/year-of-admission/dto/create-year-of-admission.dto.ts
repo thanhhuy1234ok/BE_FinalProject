@@ -4,8 +4,9 @@ export class CreateYearOfAdmissionDto {
   @IsNumber()
   year: number;
 
+  @IsOptional()
   @IsString()
-  code: string;
+  code?: string;
 
   @IsNumber()
   expectedGraduationYear: number;

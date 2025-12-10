@@ -25,7 +25,7 @@ export class CreateUserDto {
 
   // Cho STUDENT
 
-  @IsString()
+  @IsNumber()
   @IsOptional()
   major_id?: number;
 

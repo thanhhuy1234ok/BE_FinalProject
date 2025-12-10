@@ -1,14 +1,27 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
 import { Repository } from 'typeorm';
 import { Role } from 'src/roles/entities/role.entity';
-import { EMAIL_ADMIN } from 'src/helpers/types/constans';
+import {
+  ADMIN_ROLE,
+  EMAIL_ADMIN,
+  STUDENT_ROLE,
+} from 'src/helpers/types/constans';
 import { getHashPassword } from 'src/helpers/func/password.util';
 import { isValidPhone } from 'src/helpers/func/checkPhone';
 import { buildAqpQueryOptions } from 'src/helpers/func/buildAqpOptions';
+import { Student } from './entities/student.entity';
+import { YearOfAdmission } from 'src/year-of-admission/entities/year-of-admission.entity';
+import { Major } from 'src/majors/entities/major.entity';
+import { Teacher } from './entities/teacher.entity';
 
 @Injectable()
 export class UsersService {
@@ -18,48 +31,115 @@ export class UsersService {
 
     @InjectRepository(Role)
     private readonly rolesRepository: Repository<Role>,
+
+    @InjectRepository(Student)
+    private readonly studentRepo: Repository<Student>,
+
+    @InjectRepository(YearOfAdmission)
+    private readonly yearOfAdmissionRepo: Repository<YearOfAdmission>,
+
+    @InjectRepository(Major)
+    private readonly majorRepo: Repository<Major>,
+
+    @InjectRepository(Teacher)
+    private readonly teacherRepo: Repository<Teacher>,
   ) {}
 
   async create(createUserDto: CreateUserDto) {
-    const { role, password, phone, ...rest } = createUserDto;
+    const {
+      role,
+      password,
+      phone,
+      class_id,
+      major_id,
+      yearOfAdmissionId,
+      ...rest
+    } = createUserDto;
+
+    // 1. Hash password
     const hashPassword = await getHashPassword(password);
 
+    // 2. Check email tồn tại
     const checkEmail = await this.usersRepository.findOne({
       where: { email: createUserDto.email },
     });
-
     if (checkEmail) {
       throw new BadRequestException('Email already exists');
     }
 
+    // 3. Check role
     const checkRoles = await this.rolesRepository.findOne({
-      where: { id: createUserDto.role },
+      where: { id: role },
     });
-
     if (!checkRoles) {
       throw new BadRequestException('Role not found');
     }
 
+    // 4. Validate phone
     const isValidPhoneUser = isValidPhone(phone);
     if (!isValidPhoneUser) {
       throw new BadRequestException('Phone number is not valid');
     }
 
     const checkPhone = await this.usersRepository.findOne({
-      where: { phone: phone },
+      where: { phone },
     });
     if (checkPhone) {
       throw new BadRequestException('Phone number already exists');
     }
 
+    // 5. Tạo user
     const user = this.usersRepository.create({
       ...rest,
       role_id: checkRoles.id,
       password: hashPassword,
-      phone: phone,
+      phone,
       createdAt: new Date(),
     });
-    return this.usersRepository.save(user);
+
+    // ADMIN → chỉ cần user, không tạo student
+    if (checkRoles.name === ADMIN_ROLE) {
+      return await this.usersRepository.save(user);
+    }
+
+
+
+    // STUDENT → cần tạo thêm student
+    if (checkRoles.name === STUDENT_ROLE) {
+      if (!major_id || !yearOfAdmissionId) {
+        throw new BadRequestException(
+          'Missing student information: class_id, major_id, or yearOfAdmissionId',
+        );
+      }
+
+      const [major, /* classEntity, */ admissionYear] = await Promise.all([
+        this.majorRepo.findOne({ where: { id: major_id } }),
+        // this.classRepo.findOne({ where: { id: class_id } }), !class_id ||
+        this.yearOfAdmissionRepo.findOne({
+          where: { id: yearOfAdmissionId },
+        }),
+      ]);
+
+      if (!major) throw new BadRequestException('Major not found');
+      // if (!classEntity) throw new BadRequestException('Class not found');
+      if (!admissionYear)
+        throw new BadRequestException('AdmissionYear not found');
+
+    const saveUser = await this.usersRepository.save(user);
+
+      const mssv = await this.generateMssv(admissionYear);
+
+      const student = this.studentRepo.create({
+        user_id: saveUser.id, // ✅ LINK ĐÚNG USER
+        mssv,
+        major_id,
+        // class_id,
+        yearOfAdmissionId: admissionYear.id,
+      });
+
+          return await this.studentRepo.save(student);
+    }
+
   }
 
   async findAll(currentPage: number, limit: number, qs: string) {
@@ -73,9 +153,9 @@ export class UsersService {
       limit,
       defaultLimit: 10,
       textSearchFields: ['name', 'email'],
-      exactFields: ['role_id', 'isActive'], 
+      exactFields: ['role_id', 'isActive'],
       relationILike: {
-        role: { relation: 'role', field: 'name' }, 
+        role: { relation: 'role', field: 'name' },
       },
       ignoreFilters: ['current', 'pageSize'],
       defaultSort: { createdAt: 'DESC' },
@@ -165,5 +245,26 @@ export class UsersService {
         role: { id: true, name: true },
       },
     });
+  };
+
+  generateMssv = async (admissionYear: YearOfAdmission): Promise<string> => {
+    const yearShort = admissionYear.year % 100; // 2023 -> 23
+    const prefix = yearShort.toString().padStart(2, '0'); // '23'
+
+    const lastStudent = await this.studentRepo
+      .createQueryBuilder('s')
+      .where('s.id = :id', { id: admissionYear.id })
+      .andWhere('s.mssv LIKE :prefix', { prefix: `${prefix}%` })
+      .orderBy('s.mssv', 'DESC')
+      .getOne();
+
+    let nextNumber = 1;
+    if (lastStudent?.mssv) {
+      const num = parseInt(lastStudent.mssv.slice(2), 10); // lấy phần sau '23'
+      nextNumber = num + 1;
+    }
+
+    const seq = nextNumber.toString().padStart(4, '0'); // 0001
+    return `${prefix}${seq}`; // 230001
   };
 }
