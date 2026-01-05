@@ -2,6 +2,7 @@ import { Column, Entity, JoinColumn, ManyToOne, OneToOne, PrimaryColumn, Primary
 import { User } from "./user.entity";
 import { Major } from "src/majors/entities/major.entity";
 import { YearOfAdmission } from "src/year-of-admission/entities/year-of-admission.entity";
+import { AdminClass } from "src/admin-class/entities/admin-class.entity";
 
 @Entity('students')
 export class Student {
@@ -29,14 +30,14 @@ export class Student {
   @Column()
   yearOfAdmissionId: number;
 
-  // @Column()
-  // class_id: number;
-
-  // @ManyToOne(() => ClassEntity, (c) => c.students)
-  // @JoinColumn({ name: 'class_id' })
-  // classEntity: ClassEntity;
-
   @ManyToOne(() => YearOfAdmission, (y) => y.students)
   @JoinColumn({ name: 'yearOfAdmissionId' })
   yearOfAdmission: YearOfAdmission;
+
+  @Column({ nullable: true })
+  adminClassId?: number;
+
+  @ManyToOne(() => AdminClass, (cls) => cls.students)
+  @JoinColumn({ name: 'adminClassId' })
+  adminClass?: AdminClass;
 }

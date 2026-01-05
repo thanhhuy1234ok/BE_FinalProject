@@ -1,3 +1,5 @@
+
+import { AdminClass } from "src/admin-class/entities/admin-class.entity";
 import { Student } from "src/users/entities/student.entity";
 import { Column, CreateDateColumn, DeleteDateColumn, Entity, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 
@@ -12,18 +14,21 @@ export class Major {
   @Column({ unique: true })
   code: string;
 
-  @Column({default: true})
+  @Column({ default: true })
   isActive: boolean;
 
   @OneToMany(() => Student, (user) => user.major)
   students: Student[];
 
-    @CreateDateColumn({ type: 'timestamp' })
-    createdAt: Date;
-  
-    @UpdateDateColumn({ type: 'timestamp' })
-    updatedAt: Date;
-  
-    @DeleteDateColumn({ type: 'timestamp', nullable: true })
-    deletedAt: Date;
+  @OneToMany(() => AdminClass, (cls) => cls.major)
+  adminClasses: AdminClass[];
+
+  @CreateDateColumn({ type: 'timestamp' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ type: 'timestamp' })
+  updatedAt: Date;
+
+  @DeleteDateColumn({ type: 'timestamp', nullable: true })
+  deletedAt: Date;
 }
