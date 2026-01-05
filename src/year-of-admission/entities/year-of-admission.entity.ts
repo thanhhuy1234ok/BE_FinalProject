@@ -1,3 +1,4 @@
+import { AdminClass } from "src/admin-class/entities/admin-class.entity";
 import { Student } from "src/users/entities/student.entity";
 import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from "typeorm";
 
@@ -10,13 +11,16 @@ export class YearOfAdmission {
   year: number;
 
   @Column({ unique: true })
-  code: string; 
+  code: string;
   @Column()
-  expectedGraduationYear: number; 
+  expectedGraduationYear: number;
 
   @Column({ nullable: true })
   description?: string;
 
   @OneToMany(() => Student, (student) => student.yearOfAdmission)
   students: Student[];
+
+  @OneToMany(() => AdminClass, (cls) => cls.yearOfAdmission)
+  adminClasses: AdminClass[];
 }
