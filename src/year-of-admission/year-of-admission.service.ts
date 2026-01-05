@@ -1,10 +1,14 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateYearOfAdmissionDto } from './dto/create-year-of-admission.dto';
 import { UpdateYearOfAdmissionDto } from './dto/update-year-of-admission.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { YearOfAdmission } from './entities/year-of-admission.entity';
 import { Repository } from 'typeorm';
-import { buildAqpQueryOptions } from 'src/helpers/func/buildAqpOptions';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { buildAqpQueryOptions } from '@/helpers/func/buildAqpOptions';
 
 @Injectable()
 export class YearOfAdmissionService {
@@ -128,18 +132,18 @@ export class YearOfAdmissionService {
     };
   }
 
-
   findOne(id: number) {
     return this.yearOfAdmissionRepository.findOne({ where: { id } });
   }
 
   async update(id: number, updateYearOfAdmissionDto: UpdateYearOfAdmissionDto) {
-     const yearOfAdmin = await this.yearOfAdmissionRepository.findOne({ where: { id } });
-        if (!yearOfAdmin) {
-          throw new NotFoundException(`yearOfAdmin with id #${id} not found`);
-        }
-        Object.assign(yearOfAdmin, updateYearOfAdmissionDto);
-        return this.yearOfAdmissionRepository.save(yearOfAdmin);
+    const yearOfAdmin = await this.yearOfAdmissionRepository.findOne({
+      where: { id },
+    });
+    if (!yearOfAdmin) {
+      throw new NotFoundException(`yearOfAdmin with id #${id} not found`);
+    }
+    Object.assign(yearOfAdmin, updateYearOfAdmissionDto);
+    return this.yearOfAdmissionRepository.save(yearOfAdmin);
   }
-
 }

@@ -1,9 +1,9 @@
 import { ConfigService } from '@nestjs/config';
-import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PassportStrategy } from '@nestjs/passport';
 import { Injectable } from '@nestjs/common';
-import { IUser } from 'src/helpers/types/user.interface';
-import { RolesService } from 'src/roles/roles.service';
+import { IUser } from '@/helpers/types/user.interface';
+import { RolesService } from '@/roles/roles.service';
+import { ExtractJwt, Strategy } from 'passport-jwt';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -20,7 +20,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
   async validate(payload: IUser) {
     const { id, name, email, role_id } = payload;
-    const temp = await this.rolesService.findOne(role_id); 
+    const temp = await this.rolesService.findOne(role_id);
     return {
       id,
       name,

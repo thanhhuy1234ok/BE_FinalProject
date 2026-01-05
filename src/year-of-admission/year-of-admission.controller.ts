@@ -1,7 +1,15 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
 import { YearOfAdmissionService } from './year-of-admission.service';
 import { CreateYearOfAdmissionDto } from './dto/create-year-of-admission.dto';
 import { UpdateYearOfAdmissionDto } from './dto/update-year-of-admission.dto';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 
 @Controller('year-of-admission')
 export class YearOfAdmissionController {
@@ -35,5 +43,4 @@ export class YearOfAdmissionController {
   ) {
     return this.yearOfAdmissionService.update(+id, updateYearOfAdmissionDto);
   }
-
 }

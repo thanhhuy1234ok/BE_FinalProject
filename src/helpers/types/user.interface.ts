@@ -1,5 +1,3 @@
-import { Role } from 'src/roles/entities/role.entity';
-
 export interface IUser {
   id: string;
   name: string;

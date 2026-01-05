@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -9,18 +8,18 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
 import { Repository } from 'typeorm';
-import { Role } from 'src/roles/entities/role.entity';
+import { Role } from '@/roles/entities/role.entity';
 import {
   ADMIN_ROLE,
   EMAIL_ADMIN,
   STUDENT_ROLE,
-} from 'src/helpers/types/constans';
-import { getHashPassword } from 'src/helpers/func/password.util';
-import { isValidPhone } from 'src/helpers/func/checkPhone';
-import { buildAqpQueryOptions } from 'src/helpers/func/buildAqpOptions';
+} from '@/helpers/types/constans';
+import { getHashPassword } from '@/helpers/func/password.util';
+import { isValidPhone } from '@/helpers/func/checkPhone';
+import { buildAqpQueryOptions } from '@/helpers/func/buildAqpOptions';
 import { Student } from './entities/student.entity';
-import { YearOfAdmission } from 'src/year-of-admission/entities/year-of-admission.entity';
-import { Major } from 'src/majors/entities/major.entity';
+import { YearOfAdmission } from '@/year-of-admission/entities/year-of-admission.entity';
+import { Major } from '@/majors/entities/major.entity';
 import { Teacher } from './entities/teacher.entity';
 
 @Injectable()
@@ -50,7 +49,7 @@ export class UsersService {
       role,
       password,
       phone,
-      class_id,
+      // class_id,
       major_id,
       yearOfAdmissionId,
       ...rest
@@ -102,8 +101,6 @@ export class UsersService {
       return await this.usersRepository.save(user);
     }
 
-
-
     // STUDENT → cần tạo thêm student
     if (checkRoles.name === STUDENT_ROLE) {
       if (!major_id || !yearOfAdmissionId) {
@@ -125,7 +122,7 @@ export class UsersService {
       if (!admissionYear)
         throw new BadRequestException('AdmissionYear not found');
 
-    const saveUser = await this.usersRepository.save(user);
+      const saveUser = await this.usersRepository.save(user);
 
       const mssv = await this.generateMssv(admissionYear);
 
@@ -137,9 +134,8 @@ export class UsersService {
         yearOfAdmissionId: admissionYear.id,
       });
 
-          return await this.studentRepo.save(student);
+      return await this.studentRepo.save(student);
     }
-
   }
 
   async findAll(currentPage: number, limit: number, qs: string) {

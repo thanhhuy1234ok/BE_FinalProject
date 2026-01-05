@@ -1,7 +1,14 @@
-
-import { AdminClass } from "src/admin-class/entities/admin-class.entity";
-import { Student } from "src/users/entities/student.entity";
-import { Column, CreateDateColumn, DeleteDateColumn, Entity, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { AdminClass } from '@/admin-class/entities/admin-class.entity';
+import { Student } from '@/users/entities/student.entity';
+import {
+  Column,
+  CreateDateColumn,
+  DeleteDateColumn,
+  Entity,
+  OneToMany,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 
 @Entity('majors')
 export class Major {

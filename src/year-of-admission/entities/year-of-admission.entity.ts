@@ -1,6 +1,6 @@
-import { AdminClass } from "src/admin-class/entities/admin-class.entity";
-import { Student } from "src/users/entities/student.entity";
-import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from "typeorm";
+import { AdminClass } from '@/admin-class/entities/admin-class.entity';
+import { Student } from '@/users/entities/student.entity';
+import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('year_of_admissions')
 export class YearOfAdmission {

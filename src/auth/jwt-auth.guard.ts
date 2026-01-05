@@ -1,15 +1,11 @@
 import {
   ExecutionContext,
-  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AuthGuard } from '@nestjs/passport';
-import {
-  IS_PUBLIC_KEY,
-  IS_PUBLIC_PERMISSION,
-} from 'src/helpers/decorator/customize';
+import { IS_PUBLIC_KEY } from '@/helpers/decorator/customize';
 import { Request } from 'express';
 
 @Injectable()
@@ -29,12 +25,12 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     return super.canActivate(context);
   }
 
-  handleRequest(err, user, info, context: ExecutionContext) {
-    const request: Request = context.switchToHttp().getRequest();
-    const isSkipPermission = this.reflector.getAllAndOverride<boolean>(
-      IS_PUBLIC_PERMISSION,
-      [context.getHandler(), context.getClass()],
-    );
+  handleRequest(err, user, _info, _context: ExecutionContext) {
+    // const request: Request = context.switchToHttp().getRequest();
+    // const isSkipPermission = this.reflector.getAllAndOverride<boolean>(
+    //   IS_PUBLIC_PERMISSION,
+    //   [context.getHandler(), context.getClass()],
+    // );
     if (err || !user) {
       throw (
         err ||
@@ -44,20 +40,20 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       );
     }
 
-    const targetMethod = request.method;
-    const targetEndpoint = request.route?.path as string;
+    // const targetMethod = request.method;
+    // const targetEndpoint = request.route?.path as string;
 
-    const permissions = user?.permissions ?? [];
+    // const permissions = user?.permissions ?? [];
 
-    let isExist = permissions.some(
-      (permission) =>
-        targetMethod === permission.method &&
-        targetEndpoint === permission.apiPath,
-    );
+    // let isExist = permissions.some(
+    //   (permission) =>
+    //     targetMethod === permission.method &&
+    //     targetEndpoint === permission.apiPath,
+    // );
 
-    if (targetEndpoint.startsWith('/api/v1/auth')) {
-      isExist = true;
-    }
+    // if (targetEndpoint.startsWith('/api/v1/auth')) {
+    //   isExist = true;
+    // }
 
     // if (!isExist && !isSkipPermission) {
     //   throw new ForbiddenException(

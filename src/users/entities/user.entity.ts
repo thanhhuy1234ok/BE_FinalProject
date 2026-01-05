@@ -1,7 +1,17 @@
-import { Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, OneToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
-import { Student } from "./student.entity";
-import { Teacher } from "./teacher.entity";
-import { Role } from "src/roles/entities/role.entity";
+import {
+  Column,
+  CreateDateColumn,
+  DeleteDateColumn,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  OneToOne,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+} from 'typeorm';
+import { Student } from './student.entity';
+import { Teacher } from './teacher.entity';
+import { Role } from '@/roles/entities/role.entity';
 
 @Entity('users')
 export class User {

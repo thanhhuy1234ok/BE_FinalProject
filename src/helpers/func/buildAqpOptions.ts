@@ -1,5 +1,6 @@
 import aqp from 'api-query-params';
 import { ILike } from 'typeorm';
+import type { FindOptionsOrder, FindOptionsWhere } from 'typeorm';
 
 export interface AqpConfigV2 {
   currentPage?: number; // page hiện tại
@@ -7,15 +8,12 @@ export interface AqpConfigV2 {
   defaultLimit?: number; // limit mặc định nếu FE không gửi
 
   // Các field text trong bảng chính để search bằng ILike
-  // ví dụ: ['name', 'email']
   textSearchFields?: string[];
 
   // Các field filter exact (=) trong bảng chính
-  // ví dụ: ['role_id', 'isActive']
   exactFields?: string[];
 
   // Search ILike theo relation
-  // ví dụ: { role: { relation: 'role', field: 'name' } }
   relationILike?: Record<
     string,
     {
@@ -31,9 +29,9 @@ export interface AqpConfigV2 {
   defaultSort?: Record<string, 'ASC' | 'DESC'>;
 }
 
-export interface AqpBuiltResultV2 {
-  where: any;
-  order: any;
+export interface AqpBuiltResultV2<T> {
+  where: FindOptionsWhere<T> | FindOptionsWhere<T>[];
+  order: FindOptionsOrder<T>;
   offset: number;
   limit: number;
 }
@@ -41,10 +39,10 @@ export interface AqpBuiltResultV2 {
 /**
  * Helper build where/order/offset/limit dùng lại cho nhiều module
  */
-export function buildAqpQueryOptions(
+export function buildAqpQueryOptions<T>(
   qs: string,
   config: AqpConfigV2,
-): AqpBuiltResultV2 {
+): AqpBuiltResultV2<T> {
   const {
     currentPage = 1,
     limit,
@@ -56,68 +54,77 @@ export function buildAqpQueryOptions(
     defaultSort = {},
   } = config;
 
-  const { filter = {}, sort = {} } = aqp(qs || '');
+  const parsed = aqp(qs || '');
 
-  // 1. Xoá filter dư (current, pageSize,...)
-  ignoreFilters.forEach((key) => {
-    if (filter[key] !== undefined) {
-      delete filter[key];
-    }
-  });
+  // aqp trả về kiểu lỏng -> ép kiểu an toàn
+  const filter = (parsed.filter ?? {}) as Record<string, unknown>;
+  const sort = (parsed.sort ?? {}) as Record<string, unknown>;
 
-  const pageLimit = limit || defaultLimit;
+  // 1) Xoá filter dư (current, pageSize,...)
+  for (const key of ignoreFilters) {
+    if (key in filter) delete filter[key];
+  }
+
+  const pageLimit = limit ?? defaultLimit;
   const offset = (currentPage - 1) * pageLimit;
 
-  const whereCondition: any[] = [];
+  // 2) Tách filterCommon (exact) & OR conditions (ILike)
+  const whereOr: Array<Record<string, unknown>> = [];
 
-  // 2. Text search cho field root (name, email,...)
+  // Text search cho field root
   for (const field of textSearchFields) {
-    if (filter[field]) {
-      whereCondition.push({ [field]: ILike(`%${filter[field]}%`) });
-      delete filter[field]; // xoá để tránh trùng
+    const v = filter[field];
+    if (typeof v === 'string' && v.trim() !== '') {
+      whereOr.push({ [field]: ILike(`%${v}%`) });
+      delete filter[field];
     }
   }
 
-  // 3. Text search cho relation (role, subjects,...)
+  // Text search cho relation
   for (const filterKey of Object.keys(relationILike)) {
-    const cfg = relationILike[filterKey]; // { relation: 'role', field: 'name' }
-    if (filter[filterKey]) {
-      whereCondition.push({
+    const cfg = relationILike[filterKey];
+    const v = filter[filterKey];
+
+    if (typeof v === 'string' && v.trim() !== '') {
+      whereOr.push({
         [cfg.relation]: {
-          [cfg.field]: ILike(`%${filter[filterKey]}%`),
+          [cfg.field]: ILike(`%${v}%`),
         },
       });
       delete filter[filterKey];
     }
   }
 
-  // 4. Lọc lại filter còn lại chỉ cho phép exactFields
-  Object.keys(filter).forEach((key) => {
-    if (!exactFields.includes(key)) {
-      delete filter[key];
-    }
-  });
-
-  // 5. Gộp where:
-  // - Nếu có OR conditions (whereCondition.length > 0)
-  //   -> mỗi condition sẽ AND với filter chung
-  //   -> (cond1 AND filterCommon) OR (cond2 AND filterCommon)
-  let where: any = filter;
-
-  if (whereCondition.length) {
-    where = whereCondition.map((cond) => ({
-      ...cond,
-      ...filter,
-    }));
+  // 3) Chỉ giữ lại exactFields trong filterCommon
+  for (const key of Object.keys(filter)) {
+    if (!exactFields.includes(key)) delete filter[key];
   }
 
-  // 6. Build order
-  let order: any = { ...defaultSort };
+  // 4) Gộp where:
+  // - Không có OR: where = filterCommon
+  // - Có OR: (cond1 AND filterCommon) OR (cond2 AND filterCommon)
+  let where: FindOptionsWhere<T> | FindOptionsWhere<T>[] =
+    filter as FindOptionsWhere<T>;
+
+  if (whereOr.length) {
+    where = whereOr.map((cond) => ({
+      ...(cond as object),
+      ...(filter as object),
+    })) as FindOptionsWhere<T> | FindOptionsWhere<T>[];
+  }
+
+  // 5) Build order
+  let order: FindOptionsOrder<T> = defaultSort as FindOptionsOrder<T>;
 
   const sortEntries = Object.entries(sort);
   if (sortEntries.length > 0) {
-    const [sortBy, sortOrder] = sortEntries[0];
-    order = { [sortBy]: sortOrder === 1 ? 'ASC' : 'DESC' };
+    const [sortBy, sortOrderRaw] = sortEntries[0];
+
+    // aqp thường cho 1 hoặc -1, nhưng để an toàn:
+    const sortOrder =
+      sortOrderRaw === 1 || sortOrderRaw === '1' ? 'ASC' : 'DESC';
+
+    order = { [sortBy]: sortOrder } as FindOptionsOrder<T>;
   }
 
   return {

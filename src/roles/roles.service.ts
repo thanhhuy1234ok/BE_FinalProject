@@ -1,11 +1,15 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Role } from './entities/role.entity';
 import { Repository } from 'typeorm';
-import { ADMIN_ROLE } from 'src/helpers/types/constans';
-import { buildAqpQueryOptions } from 'src/helpers/func/buildAqpOptions';
+import { ADMIN_ROLE } from '@/helpers/types/constans';
+import { buildAqpQueryOptions } from '@/helpers/func/buildAqpOptions';
 
 @Injectable()
 export class RolesService {
@@ -24,7 +28,7 @@ export class RolesService {
     if (isCheckName) {
       throw new BadRequestException(`${name} đã tồn tại`);
     }
-    const newRole = await this.roleRepository.create({
+    const newRole = this.roleRepository.create({
       name: name.toLocaleLowerCase(),
       description,
       isActive,
@@ -35,7 +39,7 @@ export class RolesService {
     return await this.roleRepository.save(newRole);
   }
 
-async findAll(currentPage: number, limit: number, qs: string) {
+  async findAll(currentPage: number, limit: number, qs: string) {
     const {
       where,
       order,
@@ -46,7 +50,7 @@ async findAll(currentPage: number, limit: number, qs: string) {
       limit,
       defaultLimit: 10,
       textSearchFields: ['name'],
-      exactFields: ['isActive'], 
+      exactFields: ['isActive'],
       ignoreFilters: ['current', 'pageSize'],
       defaultSort: { createdAt: 'DESC' },
     });

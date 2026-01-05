@@ -1,10 +1,14 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateMajorDto } from './dto/create-major.dto';
 import { UpdateMajorDto } from './dto/update-major.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Major } from './entities/major.entity';
 import { Repository } from 'typeorm';
-import { buildAqpQueryOptions } from 'src/helpers/func/buildAqpOptions';
+import { buildAqpQueryOptions } from '@/helpers/func/buildAqpOptions';
 
 @Injectable()
 export class MajorsService {

@@ -1,15 +1,14 @@
 import { ConfigService } from '@nestjs/config';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { UsersService } from 'src/users/users.service';
+import { UsersService } from '@/users/users.service';
 import ms, { StringValue } from 'ms';
 import { Response } from 'express';
 
-import { ChangePasswordAuthDto, ForgotPasswordAuthDto } from './dto/create-user.dto';
-import { isValidPassword } from 'src/helpers/func/password.util';
-import { IUser } from 'src/helpers/types/user.interface';
-import delay from 'src/helpers/func/delay';
-import { RolesService } from 'src/roles/roles.service';
+import { isValidPassword } from '@/helpers/func/password.util';
+import { IUser } from '@/helpers/types/user.interface';
+import delay from '@/helpers/func/delay';
+import { RolesService } from '@/roles/roles.service';
 
 @Injectable()
 export class AuthService {
@@ -20,7 +19,7 @@ export class AuthService {
     private rolesService: RolesService,
   ) {}
 
-  async validateUser(username: string, pass: string): Promise<any> {
+  async validateUser(username: string, pass: string) {
     const user = await this.usersService.findOneByUsername(username);
     if (user) {
       const isValid = await isValidPassword(pass, user.password);
@@ -58,7 +57,10 @@ export class AuthService {
 
     response.cookie('refresh_token', refresh_token, {
       httpOnly: true,
-      maxAge: ms(this.configService.get<string>('JWT_REFRESH_EXPIRE') as StringValue ?? '7d'),
+      maxAge: ms(
+        (this.configService.get<string>('JWT_REFRESH_EXPIRE') as StringValue) ??
+          '7d',
+      ),
     });
 
     if (delayMs > 0) {
@@ -81,7 +83,11 @@ export class AuthService {
     const refresh_token = this.jwtService.sign(payload, {
       secret: this.configService.get<string>('JWT_REFRESH_TOKEN_SECRET'),
       expiresIn:
-        ms(this.configService.get<string>("JWT_ACCESS_EXPIRE") as StringValue ?? '1d')  / 1000,
+        ms(
+          (this.configService.get<string>(
+            'JWT_ACCESS_EXPIRE',
+          ) as StringValue) ?? '1d',
+        ) / 1000,
     });
     return refresh_token;
   };
@@ -91,7 +97,7 @@ export class AuthService {
       this.jwtService.verify(refreshToken, {
         secret: this.configService.get<string>('JWT_REFRESH_TOKEN_SECRET'),
       });
-      let user = await this.usersService.findUserByToken(refreshToken);
+      const user = await this.usersService.findUserByToken(refreshToken);
 
       if (user) {
         const { id, name, email, role, avatar } = user;
@@ -110,14 +116,18 @@ export class AuthService {
 
         await this.usersService.updateUserToken(refresh_token, id);
 
-        const userRole = user.role as { id: number; name: string };
-        const temp = await this.rolesService.findOne(userRole.id);
+        // const userRole = user.role as { id: number; name: string };
+        // const temp = await this.rolesService.findOne(userRole.id);
 
         response.clearCookie('refresh_token');
 
         response.cookie('refresh_token', refresh_token, {
           httpOnly: true,
-          maxAge: ms(this.configService.get<string>('JWT_REFRESH_EXPIRE') as StringValue ?? '7d'),
+          maxAge: ms(
+            (this.configService.get<string>(
+              'JWT_REFRESH_EXPIRE',
+            ) as StringValue) ?? '7d',
+          ),
         });
 
         return {
@@ -136,7 +146,7 @@ export class AuthService {
           'Refresh Token không hợp lệ. Vui lòng login',
         );
       }
-    } catch (error) {
+    } catch {
       throw new BadRequestException(
         'Refresh Token không hợp lệ. Vui lòng login',
       );

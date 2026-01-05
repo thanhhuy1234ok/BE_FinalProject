@@ -1,8 +1,15 @@
-import { Column, Entity, JoinColumn, ManyToOne, OneToOne, PrimaryColumn, PrimaryGeneratedColumn,  } from "typeorm";
-import { User } from "./user.entity";
-import { Major } from "src/majors/entities/major.entity";
-import { YearOfAdmission } from "src/year-of-admission/entities/year-of-admission.entity";
-import { AdminClass } from "src/admin-class/entities/admin-class.entity";
+import {
+  Column,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  OneToOne,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
+import { User } from './user.entity';
+import { Major } from '@/majors/entities/major.entity';
+import { YearOfAdmission } from '@/year-of-admission/entities/year-of-admission.entity';
+import { AdminClass } from '@/admin-class/entities/admin-class.entity';
 
 @Entity('students')
 export class Student {

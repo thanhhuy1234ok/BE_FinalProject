@@ -1,7 +1,14 @@
-import { Major } from "src/majors/entities/major.entity";
-import { Student } from "src/users/entities/student.entity";
-import { YearOfAdmission } from "src/year-of-admission/entities/year-of-admission.entity";
-import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
+import { Major } from '@/majors/entities/major.entity';
+import { Student } from '@/users/entities/student.entity';
+import { YearOfAdmission } from '@/year-of-admission/entities/year-of-admission.entity';
+import {
+  Column,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  OneToMany,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 
 @Entity('admin_classes')
 export class AdminClass {
@@ -31,8 +38,8 @@ export class AdminClass {
   @JoinColumn({ name: 'yearOfAdmissionId' })
   yearOfAdmission: YearOfAdmission;
 
-    @Column({ nullable: true })
-    homeroomTeacherId?: number;
+  @Column({ nullable: true })
+  homeroomTeacherId?: number;
 
   //   @ManyToOne(() => Teacher, (t) => t.homeroomClasses, { nullable: true })
   //   @JoinColumn({ name: 'homeroomTeacherId' })
