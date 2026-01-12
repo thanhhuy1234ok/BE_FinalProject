@@ -65,8 +65,12 @@ export function buildAqpQueryOptions<T>(
     if (key in filter) delete filter[key];
   }
 
-  const pageLimit = limit ?? defaultLimit;
-  const offset = (currentPage - 1) * pageLimit;
+  const pageLimit =
+    Number.isFinite(currentPage) && currentPage > 0 ? currentPage : 1;
+
+  const safeLimit = Number.isFinite(limit) && limit > 0 ? limit : defaultLimit;
+
+  const offset = (pageLimit - 1) * safeLimit;
 
   // 2) Tách filterCommon (exact) & OR conditions (ILike)
   const whereOr: Array<Record<string, unknown>> = [];
