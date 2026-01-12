@@ -21,6 +21,7 @@
 .idea/**/gradle.xml
 .idea/**/libraries
 
+
 # CMake
 cmake-build-debug/
 
@@ -398,3 +399,4 @@ Temporary Items
 dist
 .webpack
 .serverless/**/*.zip
+tsconfig.build.tsbuildinfo
