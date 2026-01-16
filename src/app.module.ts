@@ -11,6 +11,7 @@ import { MajorsModule } from './majors/majors.module';
 import { YearOfAdmissionModule } from './year-of-admission/year-of-admission.module';
 import { AdminClassModule } from './admin-class/admin-class.module';
 import { DatabasesModule } from './databases/databases.module';
+import { FileModule } from './file/file.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { DatabasesModule } from './databases/databases.module';
     YearOfAdmissionModule,
     AdminClassModule,
     DatabasesModule,
+    FileModule,
   ],
   controllers: [AppController],
   providers: [AppService],
