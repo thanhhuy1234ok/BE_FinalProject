@@ -4,6 +4,7 @@ import {
   STUDENT_ROLE,
   TEACHER_ROLE,
 } from '@/helpers/types/constans';
+import { Major } from '@/majors/entities/major.entity';
 import { Role } from '@/roles/entities/role.entity';
 import { User } from '@/users/entities/user.entity';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
@@ -20,14 +21,18 @@ export class DatabasesService implements OnModuleInit {
     @InjectRepository(Role)
     private roleRepository: Repository<Role>,
 
+    @InjectRepository(Major)
+    private majorRespository: Repository<Major>,
+
     private configService: ConfigService,
-  ) {}
+  ) { }
 
   async onModuleInit() {
     const isInit = this.configService.get<string>('SHOULD_INIT');
     if (isInit) {
       const countUser = await this.usersRepository.count();
       const countRole = await this.roleRepository.count();
+      const countMajor = await this.majorRespository.count();
 
       if (countRole === 0) {
         await this.roleRepository.save({
@@ -61,7 +66,22 @@ export class DatabasesService implements OnModuleInit {
         });
       }
 
-      if (countUser > 0 && countRole > 0) {
+      if (countMajor === 0) {
+        await this.majorRespository.save({
+          name: "Công nghệ thông tin",
+          code: "CNTT"
+        })
+        await this.majorRespository.save({
+          name: "Digital Makerting",
+          code: "DFM"
+        })
+        await this.majorRespository.save({
+          name: "Kỷ thuật điện",
+          code: "KTD"
+        })
+      }
+
+      if (countUser > 0 && countRole > 0 && countMajor > 0) {
         this.logger.log('>>>> Database is already initialized');
       }
     }
