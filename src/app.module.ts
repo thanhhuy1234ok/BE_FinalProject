@@ -13,6 +13,7 @@ import { AdminClassModule } from './admin-class/admin-class.module';
 import { DatabasesModule } from './databases/databases.module';
 import { FileModule } from './file/file.module';
 import { SubjectsModule } from './subjects/subjects.module';
+import { TermsModule } from './terms/terms.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { SubjectsModule } from './subjects/subjects.module';
     DatabasesModule,
     FileModule,
     SubjectsModule,
+    TermsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
