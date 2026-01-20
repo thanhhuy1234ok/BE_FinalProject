@@ -16,7 +16,7 @@ export class RolesService {
   constructor(
     @InjectRepository(Role)
     private readonly roleRepository: Repository<Role>,
-  ) {}
+  ) { }
 
   async create(createRoleDto: CreateRoleDto) {
     const { name, description, isActive } = createRoleDto;
@@ -29,7 +29,7 @@ export class RolesService {
       throw new BadRequestException(`${name} đã tồn tại`);
     }
     const newRole = this.roleRepository.create({
-      name: name.toLocaleLowerCase(),
+      name: name.toLocaleUpperCase(),
       description,
       isActive,
       // permissions: permissionsEntities,
