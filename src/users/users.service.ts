@@ -13,6 +13,7 @@ import {
   ADMIN_ROLE,
   EMAIL_ADMIN,
   STUDENT_ROLE,
+  TEACHER_ROLE,
 } from '@/helpers/types/constans';
 import { getHashPassword } from '@/helpers/func/password.util';
 import { isValidPhone } from '@/helpers/func/checkPhone';
@@ -42,7 +43,7 @@ export class UsersService {
 
     @InjectRepository(Teacher)
     private readonly teacherRepo: Repository<Teacher>,
-  ) {}
+  ) { }
 
   async create(createUserDto: CreateUserDto) {
     const {
@@ -135,6 +136,20 @@ export class UsersService {
       });
 
       return await this.studentRepo.save(student);
+    }
+
+    // TEACHER → cần tạo thêm teacher
+    if (checkRoles.name === TEACHER_ROLE) {
+      const saveUser = await this.usersRepository.save(user);
+      const count = await this.teacherRepo.count();
+      const msgv = `GV${String(count + 1).padStart(5, '0')}`;
+      const teacher = this.teacherRepo.create({
+        user_id: saveUser.id,
+        specialization: createUserDto.specialization,
+        degree: createUserDto.degree,
+        msgv,
+      });
+      return await this.teacherRepo.save(teacher);
     }
   }
 
