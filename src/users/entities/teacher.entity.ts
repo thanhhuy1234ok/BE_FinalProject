@@ -1,5 +1,6 @@
-import { Column, Entity, JoinColumn, OneToOne, PrimaryColumn, PrimaryGeneratedColumn } from "typeorm";
+import { Column, Entity, JoinColumn, OneToMany, OneToOne, PrimaryColumn, PrimaryGeneratedColumn } from "typeorm";
 import { User } from "./user.entity";
+import { AdminClassAdvisor } from "@/admin-class-advisor/entities/admin-class-advisor.entity";
 
 @Entity('teachers')
 export class Teacher {
@@ -22,4 +23,8 @@ export class Teacher {
 
   @Column()
   degree: string;
+
+  @OneToMany(() => AdminClassAdvisor, (x) => x.teacher)
+  advisorLinks: AdminClassAdvisor[];
+
 }

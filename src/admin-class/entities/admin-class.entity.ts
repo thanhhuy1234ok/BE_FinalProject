@@ -1,3 +1,4 @@
+import { AdminClassAdvisor } from '@/admin-class-advisor/entities/admin-class-advisor.entity';
 import { Major } from '@/majors/entities/major.entity';
 import { Student } from '@/users/entities/student.entity';
 import { YearOfAdmission } from '@/year-of-admission/entities/year-of-admission.entity';
@@ -38,12 +39,8 @@ export class AdminClass {
   @JoinColumn({ name: 'yearOfAdmissionId' })
   yearOfAdmission: YearOfAdmission;
 
-  @Column({ nullable: true })
-  homeroomTeacherId?: number;
-
-  //   @ManyToOne(() => Teacher, (t) => t.homeroomClasses, { nullable: true })
-  //   @JoinColumn({ name: 'homeroomTeacherId' })
-  //   homeroomTeacher?: Teacher;
+  @OneToMany(() => AdminClassAdvisor, (x) => x.adminClass)
+  advisorLinks: AdminClassAdvisor[];
 
   @Column({ default: true })
   isActive: boolean;

@@ -14,6 +14,7 @@ import { DatabasesModule } from './databases/databases.module';
 import { FileModule } from './file/file.module';
 import { SubjectsModule } from './subjects/subjects.module';
 import { TermsModule } from './terms/terms.module';
+import { AdminClassAdvisorModule } from './admin-class-advisor/admin-class-advisor.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { TermsModule } from './terms/terms.module';
     FileModule,
     SubjectsModule,
     TermsModule,
+    AdminClassAdvisorModule,
   ],
   controllers: [AppController],
   providers: [AppService],

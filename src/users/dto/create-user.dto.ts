@@ -38,7 +38,12 @@ export class CreateUserDto {
   yearOfAdmissionId?: number;
 
   // Cho TEACHER
+  @IsString()
+  @IsOptional()
   specialization?: string;
+
+  @IsString()
+  @IsOptional()
   degree?: string;
-  working_hours?: number;
+
 }

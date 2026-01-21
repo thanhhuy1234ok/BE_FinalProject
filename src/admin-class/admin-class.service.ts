@@ -11,6 +11,7 @@ import { Repository } from 'typeorm';
 import { Major } from '@/majors/entities/major.entity';
 import { YearOfAdmission } from '@/year-of-admission/entities/year-of-admission.entity';
 import { Teacher } from '@/users/entities/teacher.entity';
+import { normalizeMajorCode, toKCode } from '@/helpers/func/previewCode';
 
 @Injectable()
 export class AdminClassService {
@@ -26,68 +27,55 @@ export class AdminClassService {
 
     @InjectRepository(Teacher)
     private readonly teacherRepo: Repository<Teacher>,
-  ) {}
-  async create(createAdminClassDto: CreateAdminClassDto) {
-    const {
-      code,
-      name,
-      capacity,
+  ) { }
+  async create(dto: CreateAdminClassDto) {
+    const { name, capacity, major_id, yearOfAdmissionId, homeroomTeacherId } =
+      dto;
+
+    // 1) Generate code + suggestedName (đã check major/year tồn tại ở trong hàm)
+    const { code, suggestedName } = await this.buildAdminClassCode(
       major_id,
       yearOfAdmissionId,
-      homeroomTeacherId,
-    } = createAdminClassDto;
+    );
 
-    // 1. Check major tồn tại
-    const major = await this.majorRepo.findOne({ where: { id: major_id } });
-    if (!major) throw new NotFoundException('Major not found');
+    // 2) name: nếu FE không nhập => dùng suggestedName
+    const finalName = name?.trim() ? name.trim() : suggestedName;
 
-    // 2. Check yearOfAdmission tồn tại
-    const year = await this.yearOfAdmissionRepo.findOne({
-      where: { id: yearOfAdmissionId },
-    });
-    if (!year) throw new NotFoundException('YearOfAdmission not found');
-
-    let finalCode = code;
-
-    if (!finalCode || finalCode.trim() === '') {
-      finalCode = await this.generateAdminClassCode(major, year);
-    } else {
-      // Nếu gửi code → check unique
-      const existed = await this.adminClassRepository.findOne({
-        where: { code },
-      });
-      if (existed) {
-        throw new BadRequestException('Admin class code already exists');
-      }
-    }
-
-    // 4. (Optional) nếu có homeroomTeacher
-    let teacher = null;
+    // 3) Optional check teacher (nếu bạn vẫn giữ homeroomTeacherId)
     if (homeroomTeacherId) {
-      teacher = await this.teacherRepo.findOne({
+      const teacher = await this.teacherRepo.findOne({
         where: { id: homeroomTeacherId },
       });
       if (!teacher) throw new NotFoundException('Homeroom teacher not found');
     }
 
-    // 5. Create entity
     const adminClass = this.adminClassRepository.create({
-      code: finalCode,
-      name,
-      capacity,
+      code,
+      name: finalName,
+      capacity: capacity ?? 50,
       major_id,
       yearOfAdmissionId,
-      homeroomTeacherId: homeroomTeacherId ?? null,
       isActive: true,
     });
 
-    const saved = await this.adminClassRepository.save(adminClass);
-
-    return this.adminClassRepository.findOne({
-      where: { id: saved.id },
-      relations: ['major', 'yearOfAdmission'],
-    });
+    // 4) Save + handle race condition unique(code)
+    try {
+      return await this.adminClassRepository.save(adminClass);
+    } catch (e: any) {
+      // Postgres unique violation
+      if (e?.code === '23505') {
+        throw new BadRequestException(
+          'Generated class code already exists. Please try again.',
+        );
+      }
+      throw e;
+    }
   }
+
+  async previewCode(majorId: number, yearOfAdmissionId: number) {
+    return this.buildAdminClassCode(majorId, yearOfAdmissionId);
+  }
+
   findAll() {
     return `This action returns all adminClass`;
   }
@@ -108,23 +96,38 @@ export class AdminClassService {
     return `This action removes a #${id} adminClass`;
   }
 
-  private async generateAdminClassCode(major: Major, year: YearOfAdmission) {
-    // K + 2 số cuối
-    const cohort = `K${year.year.toString().slice(-2)}`; // 2023 -> K23
+  async buildAdminClassCode(majorId: number, yearOfAdmissionId: number) {
+    const major = await this.majorRepo.findOne({ where: { id: majorId } });
+    if (!major) throw new NotFoundException('Major not found');
 
-    // Lấy toàn bộ lớp đã có theo major + year
-    const existingClasses = await this.adminClassRepository.find({
-      where: {
-        major_id: major.id,
-        yearOfAdmissionId: year.id,
-      },
+    const year = await this.yearOfAdmissionRepo.findOne({
+      where: { id: yearOfAdmissionId },
+    });
+    if (!year) throw new NotFoundException('YearOfAdmission not found');
+
+    // Major: bạn nên có major.code (vd: CNTT) + major.name (vd: Công nghệ thông tin)
+    const majorCode = normalizeMajorCode((major as any).code ?? major.name);
+    const majorName = (major as any).name ?? majorCode;
+
+    // YearOfAdmission: bạn có year.year (vd: 2023). Nếu có field khác thì giữ fallback.
+    const yearCodeRaw =
+      (year as any).code ?? (year as any).year ?? (year as any).name;
+
+    const k = toKCode(yearCodeRaw); // "23"
+    const kText = `K${k}`; // "K23"
+
+    // đếm số lớp đã có trong cùng major + year
+    const existingCount = await this.adminClassRepository.count({
+      where: { major_id: majorId, yearOfAdmissionId },
     });
 
-    // Tìm số thứ tự lớp tiếp theo
-    const nextIndex = existingClasses.length + 1;
-    const indexString = nextIndex.toString().padStart(2, '0'); // 1 → 01
+    const order = existingCount + 1; // 1,2,3...
+    const order2 = String(order).padStart(2, '0'); // 01,02...
 
-    // Ghép code chuẩn: MAJOR_K23_01
-    return `${major.code}_${cohort}_${indexString}`;
+    const code = `${majorCode}_${kText}_${order2}`; // CNTT_K23_01
+    const suggestedName = `${majorName} ${kText} lớp ${order}`; // Công nghệ thông tin K23 lớp 1
+
+    return { code, suggestedName, order };
   }
+
 }
