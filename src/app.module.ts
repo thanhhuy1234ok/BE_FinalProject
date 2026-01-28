@@ -15,6 +15,8 @@ import { FileModule } from './file/file.module';
 import { SubjectsModule } from './subjects/subjects.module';
 import { TermsModule } from './terms/terms.module';
 import { AdminClassAdvisorModule } from './admin-class-advisor/admin-class-advisor.module';
+import { CampusModule } from './campus/campus.module';
+import { BuildingModule } from './building/building.module';
 
 @Module({
   imports: [
@@ -36,6 +38,8 @@ import { AdminClassAdvisorModule } from './admin-class-advisor/admin-class-advis
     SubjectsModule,
     TermsModule,
     AdminClassAdvisorModule,
+    CampusModule,
+    BuildingModule,
   ],
   controllers: [AppController],
   providers: [AppService],

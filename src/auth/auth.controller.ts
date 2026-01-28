@@ -23,7 +23,7 @@ export class AuthController {
     private authService: AuthService,
     private roleService: RolesService,
     // private mailerService: MailerService,
-  ) {}
+  ) { }
 
   @Get()
   @Render('home')
@@ -65,13 +65,13 @@ export class AuthController {
     return this.authService.processNewToken(refresh_token, response);
   }
 
-  // @Post('logout')
-  // handleLogout(
-  //   @Res({ passthrough: true }) response: Response,
-  //   @User() user: IUser,
-  // ) {
-  //   return this.authService.logout(response, user);
-  // }
+  @Post('logout')
+  handleLogout(
+    @Res({ passthrough: true }) response: Response,
+    @User() user: IUser,
+  ) {
+    return this.authService.logout(response, user);
+  }
 
   // @Public()
   // @Post('retry-password')
