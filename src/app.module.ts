@@ -17,6 +17,7 @@ import { TermsModule } from './terms/terms.module';
 import { AdminClassAdvisorModule } from './admin-class-advisor/admin-class-advisor.module';
 import { CampusModule } from './campus/campus.module';
 import { BuildingModule } from './building/building.module';
+import { RoomsModule } from './rooms/rooms.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { BuildingModule } from './building/building.module';
     AdminClassAdvisorModule,
     CampusModule,
     BuildingModule,
+    RoomsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

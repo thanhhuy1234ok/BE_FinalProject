@@ -1,5 +1,16 @@
-import { Campus } from "@/campus/entities/campus.entity";
-import { Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { Campus } from '@/campus/entities/campus.entity';
+import { Room } from '@/rooms/entities/room.entity';
+import {
+    Column,
+    CreateDateColumn,
+    DeleteDateColumn,
+    Entity,
+    JoinColumn,
+    ManyToOne,
+    OneToMany,
+    PrimaryGeneratedColumn,
+    UpdateDateColumn,
+} from 'typeorm';
 @Entity()
 export class Building {
     @PrimaryGeneratedColumn()
@@ -28,6 +39,9 @@ export class Building {
 
     @Column({ default: true })
     is_active: boolean;
+
+    @OneToMany(() => Room, (room) => room.building)
+    rooms: Room[];
 
     @CreateDateColumn()
     createdAt: Date;
