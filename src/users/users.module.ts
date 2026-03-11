@@ -8,20 +8,24 @@ import { Teacher } from './entities/teacher.entity';
 import { Role } from '@/roles/entities/role.entity';
 import { Major } from '@/majors/entities/major.entity';
 import { YearOfAdmission } from '@/year-of-admission/entities/year-of-admission.entity';
+import { AdminClass } from '@/admin-class/entities/admin-class.entity';
+import { Department } from '@/departments/entities/department.entity';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([
-      User,
-      Student,
-      Teacher,
-      Role,
-      Major,
-      YearOfAdmission,
-    ]),
-  ],
-  controllers: [UsersController],
-  providers: [UsersService],
-  exports: [UsersService],
+    imports: [
+        TypeOrmModule.forFeature([
+            User,
+            Student,
+            Teacher,
+            Role,
+            Major,
+            YearOfAdmission,
+            AdminClass,
+            Department,
+        ]),
+    ],
+    controllers: [UsersController],
+    providers: [UsersService],
+    exports: [UsersService],
 })
 export class UsersModule {}

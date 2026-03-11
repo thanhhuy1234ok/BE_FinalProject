@@ -18,6 +18,14 @@ export interface AqpConfigV2 {
         }
     >;
 
+    relationExact?: Record<
+        string,
+        {
+            relation: string;
+            field: string;
+        }
+    >;
+
     ignoreFilters?: string[];
     defaultSort?: Record<string, 'ASC' | 'DESC'>;
 }
@@ -36,11 +44,15 @@ function parseRawQuery(qs: string | Record<string, any> | undefined | null) {
     if (typeof qs === 'string') {
         const sp = new URLSearchParams(qs.startsWith('?') ? qs.slice(1) : qs);
         const obj: Record<string, any> = {};
+
         sp.forEach((v, k) => {
-            if (k in obj)
+            if (k in obj) {
                 obj[k] = Array.isArray(obj[k]) ? [...obj[k], v] : [obj[k], v];
-            else obj[k] = v;
+            } else {
+                obj[k] = v;
+            }
         });
+
         return obj;
     }
 
@@ -66,26 +78,19 @@ function coerceScalar(v: unknown) {
     const x = pickFirst(v);
 
     if (x === undefined) return undefined;
-
     if (x === null) return null;
 
     if (typeof x === 'boolean' || typeof x === 'number') return x;
-
     if (typeof x !== 'string') return x;
 
     const s = x.trim();
 
     if (s === '') return s;
 
-    // null
     if (s.toLowerCase() === 'null') return null;
-
-    // boolean
     if (s.toLowerCase() === 'true') return true;
     if (s.toLowerCase() === 'false') return false;
 
-    // number (cẩn thận: chỉ convert khi là số hợp lệ)
-    // cho phép "0", "10", "-5", "3.14"
     if (/^-?\d+(\.\d+)?$/.test(s)) {
         const n = Number(s);
         if (!Number.isNaN(n)) return n;
@@ -108,6 +113,7 @@ export function buildAqpQueryOptions<T>(
         textSearchFields = [],
         exactFields = [],
         relationILike = {},
+        relationExact = {},
         ignoreFilters = ['current', 'pageSize'],
         defaultSort = {},
     } = config;
@@ -132,17 +138,16 @@ export function buildAqpQueryOptions<T>(
     for (const k of Object.keys(filter)) {
         if (reserved.has(k)) delete filter[k];
     }
+
     for (const k of ignoreFilters) {
         if (k in filter) delete filter[k];
     }
 
-    // 1.1) Coerce giá trị cho exact fields (đặc biệt boolean như isActive)
-    // Chỉ convert những field có trong exactFields (để tránh convert text search bừa)
+    // 1.1) Coerce exact field + relation exact field
     for (const k of Object.keys(filter)) {
-        if (exactFields.includes(k)) {
+        if (exactFields.includes(k) || k in relationExact) {
             filter[k] = coerceScalar(filter[k]);
         } else {
-            // vẫn nên “pickFirst” để tránh array phá logic search
             filter[k] = pickFirst(filter[k]);
         }
     }
@@ -151,10 +156,10 @@ export function buildAqpQueryOptions<T>(
     const offset = (currentPage - 1) * pageLimit;
 
     // 2) where branches
-    let where: Array<Record<string, unknown>> = [filter];
+    let where: Array<Record<string, unknown>> = [{}];
 
     const andIntoAllBranches = (cond: Record<string, unknown>) => {
-        where = where.map((branch) => ({ ...branch, ...cond }));
+        where = where.map((branch) => deepMerge(branch, cond));
     };
 
     const andTokensForRootField = (field: string, rawVal: string) => {
@@ -162,7 +167,9 @@ export function buildAqpQueryOptions<T>(
         if (!tokens.length) return;
 
         for (const t of tokens) {
-            andIntoAllBranches({ [field]: ILike(`%${t}%`) });
+            andIntoAllBranches({
+                [field]: ILike(`%${t}%`),
+            });
         }
     };
 
@@ -187,10 +194,9 @@ export function buildAqpQueryOptions<T>(
     for (const field of textSearchFields) {
         const v = filter[field];
 
-        // ✅ chỉ cho phép string vào ILike
         if (typeof v === 'string' && v.trim() !== '') {
             andTokensForRootField(field, v);
-            delete filter[field]; // tránh bị bước exactFields xóa
+            delete filter[field];
         }
     }
 
@@ -205,18 +211,36 @@ export function buildAqpQueryOptions<T>(
         }
     }
 
-    // 5) chỉ giữ exactFields
+    // 5) Relation exact fields
+    for (const filterKey of Object.keys(relationExact)) {
+        const cfg = relationExact[filterKey];
+        const v = filter[filterKey];
+
+        if (v !== undefined) {
+            andIntoAllBranches({
+                [cfg.relation]: {
+                    [cfg.field]: v,
+                },
+            });
+
+            delete filter[filterKey];
+        }
+    }
+
+    // 6) Giữ lại exactFields
     for (const k of Object.keys(filter)) {
         if (!exactFields.includes(k)) delete filter[k];
     }
 
-    // merge exactFields vào các branch
-    where = where.map((branch) => ({ ...branch, ...filter }));
+    // 7) Merge exactFields vào branch
+    where = where.map((branch) => deepMerge(branch, filter));
 
     const finalWhere: FindOptionsWhere<T> | FindOptionsWhere<T>[] =
-        where.length <= 1 ? (where[0] as FindOptionsWhere<T>) : (where as any);
+        where.length <= 1
+            ? (where[0] as FindOptionsWhere<T>)
+            : (where as FindOptionsWhere<T>[]);
 
-    // 6) order
+    // 8) Order
     let order: FindOptionsOrder<T> = defaultSort as FindOptionsOrder<T>;
     const parsedSort = (parsed as any).sort;
 
@@ -224,15 +248,19 @@ export function buildAqpQueryOptions<T>(
         const s = parsedSort.trim();
         const desc = s.startsWith('-');
         const sortBy = desc ? s.slice(1) : s;
-        order = { [sortBy]: desc ? 'DESC' : 'ASC' } as any;
+        order = { [sortBy]: desc ? 'DESC' : 'ASC' } as FindOptionsOrder<T>;
     } else {
         const sortObj = (parsed.sort ?? {}) as Record<string, unknown>;
         const entries = Object.entries(sortObj);
+
         if (entries.length > 0) {
             const [sortBy, sortOrderRaw] = entries[0];
             const sortOrder =
                 sortOrderRaw === 1 || sortOrderRaw === '1' ? 'ASC' : 'DESC';
-            order = { [sortBy]: sortOrder } as any;
+
+            order = {
+                [sortBy]: sortOrder,
+            } as FindOptionsOrder<T>;
         }
     }
 
@@ -242,4 +270,29 @@ export function buildAqpQueryOptions<T>(
         offset,
         limit: pageLimit,
     };
+}
+
+/** Deep merge object đơn giản để merge nested relation */
+function deepMerge(
+    target: Record<string, any>,
+    source: Record<string, any>,
+): Record<string, any> {
+    const output = { ...target };
+
+    for (const key of Object.keys(source)) {
+        const sourceValue = source[key];
+        const targetValue = output[key];
+
+        if (isPlainObject(sourceValue) && isPlainObject(targetValue)) {
+            output[key] = deepMerge(targetValue, sourceValue);
+        } else {
+            output[key] = sourceValue;
+        }
+    }
+
+    return output;
+}
+
+function isPlainObject(value: unknown): value is Record<string, any> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

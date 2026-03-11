@@ -1,4 +1,16 @@
-import { Column, CreateDateColumn, DeleteDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { CurriculumSubject } from '@/curriculum_subjects/entities/curriculum_subject.entity';
+import { Department } from '@/departments/entities/department.entity';
+import {
+    Column,
+    CreateDateColumn,
+    DeleteDateColumn,
+    Entity,
+    JoinColumn,
+    ManyToOne,
+    OneToMany,
+    PrimaryGeneratedColumn,
+    UpdateDateColumn,
+} from 'typeorm';
 
 @Entity()
 export class Subject {
@@ -17,6 +29,16 @@ export class Subject {
     @Column({ default: true })
     isActive: boolean;
 
+    @Column()
+    department_id: number;
+
+    @OneToMany(() => CurriculumSubject, (cs) => cs.subject)
+    curriculumSubjects: CurriculumSubject[];
+
+    @ManyToOne(() => Department, (dept) => dept.subjects)
+    @JoinColumn({ name: 'department_id' })
+    department: Department;
+
     @CreateDateColumn({ type: 'timestamp' })
     createdAt: Date;
 
@@ -25,6 +47,4 @@ export class Subject {
 
     @DeleteDateColumn({ type: 'timestamp', nullable: true })
     deletedAt: Date;
-
-
 }

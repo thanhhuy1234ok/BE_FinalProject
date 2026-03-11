@@ -1,4 +1,4 @@
-import { IsBoolean, IsNumber, IsOptional, IsString } from "class-validator";
+import { IsBoolean, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class CreateSubjectDto {
     @IsString()
@@ -13,4 +13,7 @@ export class CreateSubjectDto {
     @IsOptional()
     @IsBoolean()
     isActive?: boolean;
+
+    @IsNumber()
+    department_id: number;
 }

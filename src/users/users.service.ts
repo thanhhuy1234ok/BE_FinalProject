@@ -22,6 +22,8 @@ import { Student } from './entities/student.entity';
 import { YearOfAdmission } from '@/year-of-admission/entities/year-of-admission.entity';
 import { Major } from '@/majors/entities/major.entity';
 import { Teacher } from './entities/teacher.entity';
+import { AdminClass } from '@/admin-class/entities/admin-class.entity';
+import { Department } from '@/departments/entities/department.entity';
 
 @Injectable()
 export class UsersService {
@@ -43,6 +45,12 @@ export class UsersService {
 
         @InjectRepository(Teacher)
         private readonly teacherRepo: Repository<Teacher>,
+
+        @InjectRepository(AdminClass)
+        private readonly classRepo: Repository<AdminClass>,
+
+        @InjectRepository(Department)
+        private departmentRepo: Repository<Department>,
     ) {}
 
     async create(createUserDto: CreateUserDto) {
@@ -50,8 +58,9 @@ export class UsersService {
             role,
             password,
             phone,
-            // class_id,
+            class_id,
             major_id,
+            departmentId,
             yearOfAdmissionId,
             ...rest
         } = createUserDto;
@@ -111,15 +120,13 @@ export class UsersService {
                 );
             }
 
-            const [major, /* classEntity, */ admissionYear] = await Promise.all(
-                [
-                    this.majorRepo.findOne({ where: { id: major_id } }),
-                    // this.classRepo.findOne({ where: { id: class_id } }), !class_id ||
-                    this.yearOfAdmissionRepo.findOne({
-                        where: { id: yearOfAdmissionId },
-                    }),
-                ],
-            );
+            const [major, classEntity, admissionYear] = await Promise.all([
+                this.majorRepo.findOne({ where: { id: major_id } }),
+                this.classRepo.findOne({ where: { id: class_id } }),
+                this.yearOfAdmissionRepo.findOne({
+                    where: { id: yearOfAdmissionId },
+                }),
+            ]);
 
             if (!major) throw new BadRequestException('Major not found');
             // if (!classEntity) throw new BadRequestException('Class not found');
@@ -134,7 +141,7 @@ export class UsersService {
                 user_id: saveUser.id, // ✅ LINK ĐÚNG USER
                 mssv,
                 major_id,
-                // class_id,
+                adminClassId: classEntity?.id,
                 yearOfAdmissionId: admissionYear.id,
             });
 
@@ -144,6 +151,12 @@ export class UsersService {
         // TEACHER → cần tạo thêm teacher
         if (checkRoles.name === TEACHER_ROLE) {
             const saveUser = await this.usersRepository.save(user);
+            const department = await this.departmentRepo.findOne({
+                where: { id: departmentId },
+            });
+            if (!department) {
+                throw new BadRequestException('Department not found');
+            }
             const count = await this.teacherRepo.count();
             const msgv = `GV${String(count + 1).padStart(5, '0')}`;
             const teacher = this.teacherRepo.create({
@@ -151,6 +164,7 @@ export class UsersService {
                 specialization: createUserDto.specialization,
                 degree: createUserDto.degree,
                 msgv,
+                department_id: departmentId,
             });
             return await this.teacherRepo.save(teacher);
         }
@@ -182,15 +196,32 @@ export class UsersService {
         const totalPages = Math.ceil(totalItems / pageLimit);
 
         const result = await this.usersRepository.find({
-            where,
+            where: {
+                ...where,
+                role: { name: Not(ADMIN_ROLE) },
+            },
             skip: offset,
             take: pageLimit,
             withDeleted: true,
             order,
-            relations: ['role', 'teacher', 'student'],
+            relations: {
+                role: true,
+                student: {
+                    major: true,
+                    yearOfAdmission: true,
+                    adminClass: true,
+                },
+                teacher: true,
+            },
             select: {
                 role: {
                     name: true,
+                },
+                student: {
+                    mssv: true,
+                    major: { name: true },
+                    yearOfAdmission: { year: true },
+                    adminClass: { name: true },
                 },
             },
         });
@@ -209,6 +240,11 @@ export class UsersService {
     findOne(id: string) {
         return this.usersRepository.findOne({
             where: { id: id },
+            relations: {
+                role: true,
+                student: true,
+                teacher: true,
+            },
         });
     }
 
@@ -290,4 +326,143 @@ export class UsersService {
         const seq = nextNumber.toString().padStart(4, '0'); // 0001
         return `${prefix}${seq}`; // 230001
     };
+
+    // async createManyUser(createManyUserDto: CreateManyUserDto[]) {
+    //     const roleStudent = await this.rolesRepository.findOne({
+    //         where: { name: 'STUDENT' },
+    //     });
+    //     const roleName = createManyUserDto.map((dto) =>
+    //         dto.role ? dto.role : roleStudent.name,
+    //     );
+
+    //     const roles = await this.rolesRepository.find({
+    //         where: {
+    //             name: In(roleName),
+    //         },
+    //     });
+
+    //     const roleMap = new Map(roles.map((role) => [role.name, role]));
+
+    //     const majorIds = createManyUserDto.map((dto) => dto.major);
+    //     const majors = await this.majorRepository.find({
+    //         where: {
+    //             code: In(majorIds),
+    //         },
+    //     });
+
+    //     const majorMap = new Map(majors.map((major) => [major.code, major]));
+
+    //     const classCodes = createManyUserDto.map((dto) => dto.class);
+    //     const classes = await this.classRepository.find({
+    //         where: {
+    //             name: In(classCodes), // Tìm lớp qua mã
+    //         },
+    //     });
+
+    //     const classMap = new Map(
+    //         classes.map((classEntity) => [classEntity.name, classEntity]),
+    //     );
+
+    //     const cohortCodes = createManyUserDto.map((dto) => dto.yearOfAdmission);
+    //     const cohorts = await this.cohortRepository.find({
+    //         where: {
+    //             startYear: In(cohortCodes),
+    //         },
+    //     });
+
+    //     // Ánh xạ mã Cohort -> đối tượng Cohort
+    //     const cohortMap = new Map(
+    //         cohorts.map((cohort) => [cohort.startYear, cohort]),
+    //     );
+
+    //     console.log(cohortCodes);
+
+    //     let countSuccess = 0;
+    //     let countError = 0;
+
+    //     const users = await Promise.all(
+    //         createManyUserDto.map(async (dto) => {
+    //             try {
+    //                 const existingUser = await this.usersRepository.findOne({
+    //                     where: { email: dto.email },
+    //                 });
+    //                 if (existingUser) {
+    //                     throw new BadRequestException(
+    //                         `Email ${dto.email} đã tồn tại`,
+    //                     );
+    //                 }
+
+    //                 const role = roleMap.get(
+    //                     dto.role ? dto.role : roleStudent.name,
+    //                 );
+    //                 if (!role) {
+    //                     throw new BadRequestException(
+    //                         `Không tìm thấy vai trò với tên "${dto.role || roleStudent.name}"`,
+    //                     );
+    //                 }
+
+    //                 const major = majorMap.get(dto.major);
+    //                 if (!major) {
+    //                     throw new BadRequestException(
+    //                         `Không tìm thấy ngành học với mã "${dto.major}"`,
+    //                     );
+    //                 }
+
+    //                 const cohort = cohortMap.get(dto.yearOfAdmission);
+    //                 if (!cohort) {
+    //                     throw new Error(
+    //                         `Không tìm thấy Cohort với mã "${dto.yearOfAdmission}"`,
+    //                     );
+    //                 }
+
+    //                 const classEntity = classMap.get(dto.class);
+    //                 if (!classEntity) {
+    //                     throw new BadRequestException(
+    //                         `Không tìm thấy lớp học với mã "${dto.class}"`,
+    //                     );
+    //                 }
+
+    //                 const currentCount = await this.usersRepository.count({
+    //                     where: { class: { id: classEntity.id } },
+    //                 });
+
+    //                 if (currentCount >= classEntity.maxCapacity) {
+    //                     throw new BadRequestException(
+    //                         `Lớp học "${dto.class}" đã đạt đến giới hạn (${classEntity.maxCapacity})`,
+    //                     );
+    //                 }
+
+    //                 const hashPassword = dto.password
+    //                     ? await getHashPassword(dto.password)
+    //                     : await getHashPassword('123456');
+
+    //                 const user = this.usersRepository.create({
+    //                     name: dto.name,
+    //                     email: dto.email,
+    //                     password: hashPassword,
+    //                     role: role,
+    //                     major: major,
+    //                     class: classEntity,
+    //                     yearOfAdmission: cohort,
+    //                 });
+
+    //                 countSuccess++;
+    //                 return user;
+    //             } catch (error) {
+    //                 console.error(`Lỗi khi tạo user: ${error.message}`);
+    //                 countError++;
+    //                 return null;
+    //             }
+    //         }),
+    //     );
+
+    //     const validUsers = users.filter((user) => user !== null);
+    //     const data = await this.usersRepository.save(validUsers);
+
+    //     return {
+    //         countSuccess: countSuccess,
+    //         countError: countError,
+    //         data: data,
+    //     };
+    // }
 }
