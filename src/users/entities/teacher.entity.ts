@@ -1,30 +1,46 @@
-import { Column, Entity, JoinColumn, OneToMany, OneToOne, PrimaryColumn, PrimaryGeneratedColumn } from "typeorm";
-import { User } from "./user.entity";
-import { AdminClassAdvisor } from "@/admin-class-advisor/entities/admin-class-advisor.entity";
+import {
+    Column,
+    Entity,
+    JoinColumn,
+    ManyToOne,
+    OneToMany,
+    OneToOne,
+    PrimaryColumn,
+    PrimaryGeneratedColumn,
+} from 'typeorm';
+import { User } from './user.entity';
+import { AdminClassAdvisor } from '@/admin-class-advisor/entities/admin-class-advisor.entity';
+import { Department } from '@/departments/entities/department.entity';
 
 @Entity('teachers')
 export class Teacher {
-  @PrimaryGeneratedColumn()
-  id: number;
+    @PrimaryGeneratedColumn()
+    id: number;
 
-  @Column('uuid', { unique: true })
-  user_id: string;
+    @Column('uuid', { unique: true })
+    user_id: string;
 
-  @OneToOne(() => User, (user) => user.teacher)
-  @JoinColumn({ name: 'user_id' })
-  user: User;
+    @OneToOne(() => User, (user) => user.teacher)
+    @JoinColumn({ name: 'user_id' })
+    user: User;
 
-  @Column({ nullable: true })
-  //   @Column({ unique: true })
-  msgv: string;
+    @Column({ nullable: true })
+    //   @Column({ unique: true })
+    msgv: string;
 
-  @Column()
-  specialization: string;
+    @Column()
+    specialization: string;
 
-  @Column()
-  degree: string;
+    @Column()
+    degree: string;
 
-  @OneToMany(() => AdminClassAdvisor, (x) => x.teacher)
-  advisorLinks: AdminClassAdvisor[];
+    @ManyToOne(() => Department, (d) => d.teachers, { nullable: false })
+    @JoinColumn({ name: 'department_id' })
+    department: Department;
 
+    @Column()
+    department_id: number;
+
+    @OneToMany(() => AdminClassAdvisor, (x) => x.teacher)
+    advisorLinks: AdminClassAdvisor[];
 }

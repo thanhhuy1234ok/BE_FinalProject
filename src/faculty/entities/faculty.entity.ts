@@ -1,43 +1,33 @@
-import { CurriculumSubject } from '@/curriculum_subjects/entities/curriculum_subject.entity';
 import { Department } from '@/departments/entities/department.entity';
 import {
     Column,
     CreateDateColumn,
     DeleteDateColumn,
     Entity,
-    JoinColumn,
-    ManyToOne,
     OneToMany,
     PrimaryGeneratedColumn,
     UpdateDateColumn,
 } from 'typeorm';
 
 @Entity()
-export class Subject {
+export class Faculty {
     @PrimaryGeneratedColumn()
     id: number;
 
     @Column()
-    name: string;
+    code: string; // FIT, FBA, FENG
 
     @Column()
-    code: string;
+    name: string; // Faculty of Information Technology
 
-    @Column()
-    credit: number;
+    @Column({ nullable: true })
+    description?: string;
 
     @Column({ default: true })
     isActive: boolean;
 
-    @Column()
-    department_id: number;
-
-    @OneToMany(() => CurriculumSubject, (cs) => cs.subject)
-    curriculumSubjects: CurriculumSubject[];
-
-    @ManyToOne(() => Department, (dept) => dept.subjects)
-    @JoinColumn({ name: 'department_id' })
-    department: Department;
+    @OneToMany(() => Department, (department) => department.faculty)
+    departments: Department[];
 
     @CreateDateColumn({ type: 'timestamp' })
     createdAt: Date;

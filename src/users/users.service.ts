@@ -23,6 +23,7 @@ import { YearOfAdmission } from '@/year-of-admission/entities/year-of-admission.
 import { Major } from '@/majors/entities/major.entity';
 import { Teacher } from './entities/teacher.entity';
 import { AdminClass } from '@/admin-class/entities/admin-class.entity';
+import { Department } from '@/departments/entities/department.entity';
 
 @Injectable()
 export class UsersService {
@@ -47,6 +48,9 @@ export class UsersService {
 
         @InjectRepository(AdminClass)
         private readonly classRepo: Repository<AdminClass>,
+
+        @InjectRepository(Department)
+        private departmentRepo: Repository<Department>,
     ) {}
 
     async create(createUserDto: CreateUserDto) {
@@ -56,6 +60,7 @@ export class UsersService {
             phone,
             class_id,
             major_id,
+            departmentId,
             yearOfAdmissionId,
             ...rest
         } = createUserDto;
@@ -146,6 +151,12 @@ export class UsersService {
         // TEACHER → cần tạo thêm teacher
         if (checkRoles.name === TEACHER_ROLE) {
             const saveUser = await this.usersRepository.save(user);
+            const department = await this.departmentRepo.findOne({
+                where: { id: departmentId },
+            });
+            if (!department) {
+                throw new BadRequestException('Department not found');
+            }
             const count = await this.teacherRepo.count();
             const msgv = `GV${String(count + 1).padStart(5, '0')}`;
             const teacher = this.teacherRepo.create({
@@ -153,6 +164,7 @@ export class UsersService {
                 specialization: createUserDto.specialization,
                 degree: createUserDto.degree,
                 msgv,
+                department_id: departmentId,
             });
             return await this.teacherRepo.save(teacher);
         }
@@ -184,7 +196,10 @@ export class UsersService {
         const totalPages = Math.ceil(totalItems / pageLimit);
 
         const result = await this.usersRepository.find({
-            where,
+            where: {
+                ...where,
+                role: { name: Not(ADMIN_ROLE) },
+            },
             skip: offset,
             take: pageLimit,
             withDeleted: true,
@@ -225,6 +240,11 @@ export class UsersService {
     findOne(id: string) {
         return this.usersRepository.findOne({
             where: { id: id },
+            relations: {
+                role: true,
+                student: true,
+                teacher: true,
+            },
         });
     }
 

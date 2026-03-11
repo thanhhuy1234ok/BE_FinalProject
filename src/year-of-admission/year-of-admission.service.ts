@@ -111,7 +111,7 @@ export class YearOfAdmissionService {
             defaultLimit: 10,
             textSearchFields: ['year', 'code'],
             ignoreFilters: ['current', 'pageSize'],
-            defaultSort: { createdAt: 'DESC' },
+            defaultSort: { year: 'DESC' },
         });
 
         const totalItems = await this.yearOfAdmissionRepository.count({

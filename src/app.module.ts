@@ -18,6 +18,10 @@ import { AdminClassAdvisorModule } from './admin-class-advisor/admin-class-advis
 import { CampusModule } from './campus/campus.module';
 import { BuildingModule } from './building/building.module';
 import { RoomsModule } from './rooms/rooms.module';
+import { CurriculumModule } from './curriculum/curriculum.module';
+import { CurriculumSubjectsModule } from './curriculum_subjects/curriculum_subjects.module';
+import { DepartmentsModule } from './departments/departments.module';
+import { FacultyModule } from './faculty/faculty.module';
 
 @Module({
   imports: [
@@ -42,6 +46,10 @@ import { RoomsModule } from './rooms/rooms.module';
     CampusModule,
     BuildingModule,
     RoomsModule,
+    CurriculumModule,
+    CurriculumSubjectsModule,
+    DepartmentsModule,
+    FacultyModule,
   ],
   controllers: [AppController],
   providers: [AppService],

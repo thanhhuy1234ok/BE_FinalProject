@@ -1,4 +1,5 @@
 import { AdminClass } from '@/admin-class/entities/admin-class.entity';
+import { Curriculum } from '@/curriculum/entities/curriculum.entity';
 import { Student } from '@/users/entities/student.entity';
 import {
     Column,
@@ -31,6 +32,10 @@ export class YearOfAdmission {
 
     @OneToMany(() => AdminClass, (cls) => cls.yearOfAdmission)
     adminClasses: AdminClass[];
+
+    @OneToMany(() => Curriculum, (c) => c.yearOfAdmission)
+    curriculums: Curriculum[];
+
     @CreateDateColumn({ type: 'timestamp' })
     createdAt: Date;
 
