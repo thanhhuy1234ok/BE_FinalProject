@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+    BadRequestException,
+    Injectable,
+    NotFoundException,
+} from '@nestjs/common';
 import { CreateSubjectDto } from './dto/create-subject.dto';
 import { UpdateSubjectDto } from './dto/update-subject.dto';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -6,27 +10,49 @@ import { Subject } from './entities/subject.entity';
 import { Repository } from 'typeorm';
 import { buildAqpQueryOptions } from '@/helpers/func/buildAqpOptions';
 import { EMAIL_ADMIN } from '@/helpers/types/constans';
+import { Department } from '@/departments/entities/department.entity';
 
 @Injectable()
 export class SubjectsService {
     constructor(
         @InjectRepository(Subject)
         private readonly subjectRepository: Repository<Subject>,
+
+        @InjectRepository(Department)
+        private readonly departmentRepo: Repository<Department>,
     ) {}
 
     async create(createSubjectDto: CreateSubjectDto) {
-        const checkCode = await this.subjectRepository.findOne({
-            where: { code: createSubjectDto.code, name: createSubjectDto.name },
+        const name = createSubjectDto.name.trim().replace(/\s+/g, ' ');
+        const code = createSubjectDto.code.trim().toUpperCase();
+        const departmentId = createSubjectDto.department_id;
+
+        // check department tồn tại
+        const department = await this.departmentRepo.findOne({
+            where: { id: departmentId },
         });
-        if (checkCode) {
-            throw new Error('Subject already exists');
+
+        if (!department) {
+            throw new NotFoundException('Bộ môn không tồn tại');
         }
-        console.log(createSubjectDto);
-        return this.subjectRepository.save({
-            ...createSubjectDto,
-            code: createSubjectDto.code.toUpperCase(),
-            department_id: createSubjectDto.department_id,
+
+        // check trùng code
+        const existedCode = await this.subjectRepository.findOne({
+            where: { code },
         });
+
+        if (existedCode) {
+            throw new BadRequestException('Mã môn học đã tồn tại');
+        }
+
+        const subject = this.subjectRepository.create({
+            ...createSubjectDto,
+            name,
+            code,
+            department_id: departmentId,
+        });
+
+        return await this.subjectRepository.save(subject);
     }
 
     async findAll(currentPage: number, limit: number, qs: string) {

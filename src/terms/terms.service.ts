@@ -7,7 +7,7 @@ import {
 import { CreateTermDto } from './dto/create-term.dto';
 import { UpdateTermDto } from './dto/update-term.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Term } from './entities/term.entity';
+import { SemesterEnum, Term } from './entities/term.entity';
 import { Repository } from 'typeorm';
 import { buildAqpQueryOptions } from '@/helpers/func/buildAqpOptions';
 
@@ -19,42 +19,117 @@ export class TermsService {
     ) {}
 
     async create(createTermDto: CreateTermDto) {
+        const { year, semester, isActive } = createTermDto;
+
         const start = new Date(createTermDto.startDate);
         const end = new Date(createTermDto.endDate);
 
         if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-            throw new BadRequestException('Invalid startDate or endDate');
-        }
-
-        if (start.getTime() >= end.getTime()) {
-            throw new BadRequestException('Start date must be before end date');
-        }
-
-        const code = createTermDto.code.trim().toUpperCase();
-
-        const existingYearSemester = await this.termsRepository.findOne({
-            where: {
-                year: createTermDto.year,
-                semester: createTermDto.semester,
-            },
-        });
-        if (existingYearSemester) {
-            throw new ConflictException(
-                'A term with the same year and semester already exists',
+            throw new BadRequestException(
+                'Ngày bắt đầu hoặc ngày kết thúc không hợp lệ',
             );
         }
 
-        const existingCode = await this.termsRepository.findOne({
-            where: { code },
-        });
-        if (existingCode) {
-            throw new ConflictException(
-                'A term with the same code already exists',
+        start.setHours(0, 0, 0, 0);
+        end.setHours(0, 0, 0, 0);
+
+        if (start >= end) {
+            throw new BadRequestException(
+                'Ngày bắt đầu phải trước ngày kết thúc',
             );
         }
 
-        const term = this.termsRepository.create({ ...createTermDto, code });
-        return this.termsRepository.save(term);
+        // ✅ Năm của ngày phải khớp với năm học
+        if (start.getFullYear() !== year || end.getFullYear() !== year) {
+            throw new BadRequestException(
+                `Kỳ ${semester} của năm ${year} phải có ngày bắt đầu và ngày kết thúc thuộc năm ${year}`,
+            );
+        }
+
+        const existed = await this.termsRepository.findOne({
+            where: { year, semester },
+        });
+
+        if (existed) {
+            throw new ConflictException(
+                `Kỳ ${semester} của năm ${year} đã tồn tại`,
+            );
+        }
+
+        const prerequisiteMap = {
+            [SemesterEnum.HK1]: null,
+            [SemesterEnum.HK2]: SemesterEnum.HK1,
+            [SemesterEnum.SUMMER]: SemesterEnum.HK2,
+        };
+
+        const prerequisiteSemester = prerequisiteMap[semester];
+        let prerequisiteTerm: Term | null = null;
+
+        if (prerequisiteSemester) {
+            prerequisiteTerm = await this.termsRepository.findOne({
+                where: {
+                    year,
+                    semester: prerequisiteSemester,
+                },
+            });
+
+            if (!prerequisiteTerm) {
+                throw new BadRequestException(
+                    `Không thể tạo ${semester} khi chưa tồn tại ${prerequisiteSemester} của năm ${year}`,
+                );
+            }
+
+            const prerequisiteEnd = new Date(prerequisiteTerm.endDate);
+            prerequisiteEnd.setHours(0, 0, 0, 0);
+
+            if (start <= prerequisiteEnd) {
+                throw new BadRequestException(
+                    `${semester} phải có ngày bắt đầu sau ngày kết thúc của ${prerequisiteSemester} (${prerequisiteEnd.toLocaleDateString('vi-VN')})`,
+                );
+            }
+        }
+
+        const termsInYear = await this.termsRepository.find({
+            where: { year },
+        });
+
+        for (const item of termsInYear) {
+            const itemStart = new Date(item.startDate);
+            const itemEnd = new Date(item.endDate);
+
+            itemStart.setHours(0, 0, 0, 0);
+            itemEnd.setHours(0, 0, 0, 0);
+
+            const isOverlapping = start <= itemEnd && end >= itemStart;
+
+            if (isOverlapping) {
+                throw new BadRequestException(
+                    `Khoảng thời gian bị trùng với ${item.semester} năm ${item.year} (${itemStart.toLocaleDateString('vi-VN')} - ${itemEnd.toLocaleDateString('vi-VN')})`,
+                );
+            }
+        }
+
+        if (isActive) {
+            const currentActiveTerm = await this.termsRepository.findOne({
+                where: { isActive: true },
+            });
+
+            if (currentActiveTerm) {
+                throw new BadRequestException(
+                    `Hiện đã có kỳ ${currentActiveTerm.semester} năm ${currentActiveTerm.year} đang hoạt động. Vui lòng tạo kỳ mới ở trạng thái chưa hoạt động.`,
+                );
+            }
+        }
+
+        const term = this.termsRepository.create({
+            year,
+            semester,
+            startDate: start,
+            endDate: end,
+            isActive: isActive ?? false,
+        });
+
+        return await this.termsRepository.save(term);
     }
 
     async findAll(currentPage: number, limit: number, qs: string) {
@@ -67,10 +142,10 @@ export class TermsService {
             currentPage,
             limit,
             defaultLimit: 10,
-            textSearchFields: ['name', 'code'],
-            exactFields: ['code', 'year', 'semester'],
+            textSearchFields: [],
+            exactFields: ['year', 'semester', 'isActive'],
             ignoreFilters: ['current', 'pageSize'],
-            defaultSort: { name: 'DESC' },
+            defaultSort: { createdAt: 'DESC' },
         });
 
         const totalItems = await this.termsRepository.count({ where });
@@ -131,5 +206,75 @@ export class TermsService {
 
         await this.termsRepository.softDelete(id);
         return { message: `Term ${id} deleted successfully` };
+    }
+
+    private normalizeDate(date: Date | string) {
+        const d = new Date(date);
+        d.setHours(0, 0, 0, 0);
+        return d;
+    }
+
+    async activate(id: number) {
+        const term = await this.termsRepository.findOne({
+            where: { id },
+        });
+
+        if (!term) {
+            throw new NotFoundException('Không tìm thấy kỳ học');
+        }
+
+        const currentActiveTerm = await this.termsRepository.findOne({
+            where: { isActive: true },
+        });
+
+        if (currentActiveTerm?.id === term.id) {
+            throw new BadRequestException('Kỳ học này đang hoạt động');
+        }
+
+        const today = this.normalizeDate(new Date());
+
+        const allTerms = await this.termsRepository.find();
+
+        const actualCurrentTerm = allTerms.find((item) => {
+            const startDate = this.normalizeDate(item.startDate);
+            const endDate = this.normalizeDate(item.endDate);
+
+            return today >= startDate && today <= endDate;
+        });
+
+        if (currentActiveTerm) {
+            const currentEndDate = this.normalizeDate(
+                currentActiveTerm.endDate,
+            );
+            const targetStartDate = this.normalizeDate(term.startDate);
+
+            const isActiveTermCorrect =
+                !!actualCurrentTerm &&
+                actualCurrentTerm.id === currentActiveTerm.id;
+
+            if (isActiveTermCorrect) {
+                if (today < currentEndDate) {
+                    throw new BadRequestException(
+                        `Không thể chuyển kỳ vì kỳ ${currentActiveTerm.semester} năm ${currentActiveTerm.year} chưa kết thúc. Ngày kết thúc là ${currentEndDate.toLocaleDateString('vi-VN')}`,
+                    );
+                }
+
+                if (targetStartDate < currentEndDate) {
+                    throw new BadRequestException(
+                        'Không thể chuyển sang kỳ học có ngày bắt đầu trước ngày kết thúc của kỳ hiện tại',
+                    );
+                }
+            }
+        }
+
+        await this.termsRepository
+            .createQueryBuilder()
+            .update(Term)
+            .set({ isActive: false })
+            .execute();
+
+        term.isActive = true;
+
+        return await this.termsRepository.save(term);
     }
 }

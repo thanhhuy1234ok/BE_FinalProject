@@ -7,6 +7,7 @@ import {
     Param,
     Delete,
     Query,
+    ParseIntPipe,
 } from '@nestjs/common';
 import { FacultyService } from './faculty.service';
 import { CreateFacultyDto } from './dto/create-faculty.dto';
@@ -46,5 +47,10 @@ export class FacultyController {
     @Delete(':id')
     remove(@Param('id') id: string) {
         return this.facultyService.remove(+id);
+    }
+
+    @Get(':id/stats')
+    async getFacultyStats(@Param('id', ParseIntPipe) id: number) {
+        return await this.facultyService.getFacultyStats(id);
     }
 }

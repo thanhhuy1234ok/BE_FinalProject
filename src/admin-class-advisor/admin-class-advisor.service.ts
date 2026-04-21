@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+    BadRequestException,
+    Injectable,
+    NotFoundException,
+} from '@nestjs/common';
 import { CreateAdminClassAdvisorDto } from './dto/create-admin-class-advisor.dto';
 import { UpdateAdminClassAdvisorDto } from './dto/update-admin-class-advisor.dto';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -6,119 +10,157 @@ import { IsNull, Repository } from 'typeorm';
 import { AdminClass } from '@/admin-class/entities/admin-class.entity';
 import { Teacher } from '@/users/entities/teacher.entity';
 import { AdminClassAdvisor } from './entities/admin-class-advisor.entity';
-import { DataSource } from "typeorm";
-
+import { DataSource } from 'typeorm';
+import { AdminClassStatus } from '@/helpers/enum/enum.global';
 
 @Injectable()
 export class AdminClassAdvisorService {
-  constructor(
-    @InjectRepository(AdminClassAdvisor)
-    private readonly adminClassAdvisorRepository: Repository<AdminClassAdvisor>,
+    constructor(
+        @InjectRepository(AdminClassAdvisor)
+        private readonly adminClassAdvisorRepository: Repository<AdminClassAdvisor>,
 
-    @InjectRepository(Teacher)
-    private readonly teacherRepository: Repository<Teacher>,
+        @InjectRepository(Teacher)
+        private readonly teacherRepository: Repository<Teacher>,
 
-    @InjectRepository(AdminClass)
-    private readonly adminClassRepository: Repository<AdminClass>,
+        @InjectRepository(AdminClass)
+        private readonly adminClassRepository: Repository<AdminClass>,
 
-    private readonly dataSource: DataSource,
-  ) { }
-  async create(dto: CreateAdminClassAdvisorDto) {
-    const startAt = dto.startAt ? new Date(dto.startAt) : new Date();
-    if (Number.isNaN(startAt.getTime())) {
-      throw new BadRequestException('startAt is invalid');
+        private readonly dataSource: DataSource,
+    ) {}
+    async create(dto: CreateAdminClassAdvisorDto) {
+        const startAt = dto.startAt ? new Date(dto.startAt) : new Date();
+
+        if (Number.isNaN(startAt.getTime())) {
+            throw new BadRequestException('Ngày bắt đầu không hợp lệ');
+        }
+
+        return this.dataSource.transaction(async (manager) => {
+            // 1) Kiểm tra lớp hành chính
+            const adminClass = await manager.findOne(AdminClass, {
+                where: { id: dto.adminClassId },
+            });
+
+            if (!adminClass) {
+                throw new NotFoundException('Không tìm thấy lớp hành chính');
+            }
+
+            if (adminClass.status === AdminClassStatus.GRADUATED) {
+                throw new BadRequestException(
+                    'Không thể phân công giáo viên chủ nhiệm cho lớp đã tốt nghiệp',
+                );
+            }
+
+            // 2) Kiểm tra giáo viên
+            const teacher = await manager.findOne(Teacher, {
+                where: { id: dto.teacherId },
+            });
+
+            if (!teacher) {
+                throw new NotFoundException('Không tìm thấy giáo viên');
+            }
+
+            // 3) Chặn giáo viên đang là GVCN active ở lớp khác
+            const teacherActive = await manager.findOne(AdminClassAdvisor, {
+                where: {
+                    teacherId: dto.teacherId,
+                    endAt: IsNull(),
+                },
+            });
+
+            if (
+                teacherActive &&
+                teacherActive.adminClassId !== dto.adminClassId
+            ) {
+                throw new BadRequestException(
+                    `Giáo viên này đang là cố vấn học tập của lớp ${teacherActive.adminClassId}`,
+                );
+            }
+
+            // 4) Kiểm tra lớp hiện tại đã có GVCN active chưa
+            const currentActive = await manager.findOne(AdminClassAdvisor, {
+                where: {
+                    adminClassId: dto.adminClassId,
+                    endAt: IsNull(),
+                },
+            });
+
+            if (currentActive) {
+                // 4a) Nếu đang là cùng giáo viên thì chặn
+                if (currentActive.teacherId === dto.teacherId) {
+                    throw new BadRequestException(
+                        'Lớp này đã có giáo viên chủ nhiệm này đang hoạt động',
+                    );
+                }
+
+                // 4b) startAt mới phải sau startAt cũ
+                if (startAt <= new Date(currentActive.startAt)) {
+                    throw new BadRequestException(
+                        'Ngày bắt đầu mới phải sau ngày bắt đầu của giáo viên chủ nhiệm hiện tại',
+                    );
+                }
+
+                // 4c) Kết thúc GVCN cũ trước khi tạo GVCN mới
+                currentActive.endAt = new Date(startAt.getTime() - 1);
+                await manager.save(AdminClassAdvisor, currentActive);
+            }
+
+            // 5) Chặn trùng lịch sử
+            const duplicated = await manager.findOne(AdminClassAdvisor, {
+                where: {
+                    adminClassId: dto.adminClassId,
+                    teacherId: dto.teacherId,
+                    startAt,
+                },
+            });
+
+            if (duplicated) {
+                throw new BadRequestException(
+                    'Bản ghi giáo viên chủ nhiệm đã tồn tại',
+                );
+            }
+
+            // 6) Tạo bản ghi mới
+            const record = manager.create(AdminClassAdvisor, {
+                adminClassId: dto.adminClassId,
+                teacherId: dto.teacherId,
+                startAt,
+                endAt: null,
+                isPrimary: true,
+            });
+
+            return await manager.save(AdminClassAdvisor, record);
+        });
     }
 
-    return this.dataSource.transaction(async (manager) => {
-      // 1) Check class
-      const adminClass = await manager.findOne(AdminClass, {
-        where: { id: dto.adminClassId },
-      });
+    findAll() {
+        return `This action returns all adminClassAdvisor`;
+    }
 
-      if (!adminClass) throw new NotFoundException('AdminClass not found');
-      if (!adminClass.isActive) throw new BadRequestException('Class is not active');
+    async findOne(adminClassId: number) {
+        const advisor = await this.adminClassAdvisorRepository.findOne({
+            where: {
+                adminClass: { id: adminClassId },
+            },
+            relations: {
+                teacher: {
+                    user: true,
+                    department: true,
+                },
+                adminClass: true,
+            },
+            order: {
+                id: 'DESC',
+            },
+        });
 
-      // ✅ chặn teacher đang advisor active ở lớp khác
-      const teacherActive = await manager.findOne(AdminClassAdvisor, {
-        where: {
-          teacherId: dto.teacherId,
+        return advisor;
+    }
 
-        },
-      });
+    update(id: number, updateAdminClassAdvisorDto: UpdateAdminClassAdvisorDto) {
+        return `This action updates a #${id} adminClassAdvisor`;
+    }
 
-      if (teacherActive && teacherActive.adminClassId !== dto.adminClassId) {
-        throw new BadRequestException(
-          `Teacher is already active advisor of class ${teacherActive.adminClassId}`,
-        );
-      }
-      // 2) Check teacher
-      const teacher = await manager.findOne(Teacher, {
-        where: { id: dto.teacherId },
-      });
-      if (!teacher) throw new NotFoundException('Teacher not found');
-
-      // 3) Check lớp đã có advisor active chưa (rule: mỗi lớp chỉ 1 advisor)
-      const currentActive = await manager.findOne(AdminClassAdvisor, {
-        where: { adminClassId: dto.adminClassId, endAt: IsNull() },
-      });
-
-      // Nếu đã có advisor active
-      if (currentActive) {
-        // 3a) Nếu đang là cùng teacher => không cần tạo mới
-        if (currentActive.teacherId === dto.teacherId) {
-          throw new BadRequestException('This class already has this advisor active');
-        }
-
-        // 3b) Validate startAt hợp lệ (tránh endAt < startAt cũ)
-        if (startAt <= currentActive.startAt) {
-          throw new BadRequestException(
-            'startAt must be after current advisor startAt',
-          );
-        }
-
-        // 3c) End advisor cũ trước khi tạo advisor mới
-        currentActive.endAt = new Date(startAt.getTime() - 1);
-        await manager.save(AdminClassAdvisor, currentActive);
-      }
-
-      // 4) Optional: chặn duplicate history record (cùng teacher, cùng startAt)
-      const duplicated = await manager.findOne(AdminClassAdvisor, {
-        where: {
-          adminClassId: dto.adminClassId,
-          teacherId: dto.teacherId,
-          startAt,
-        },
-      });
-      if (duplicated) {
-        throw new BadRequestException('Duplicate advisor record');
-      }
-
-      // 5) Create new advisor record (active)
-      const record = manager.create(AdminClassAdvisor, {
-        adminClassId: dto.adminClassId,
-        teacherId: dto.teacherId,
-        startAt,
-        endAt: null,
-        isPrimary: true, // optional, vì bạn chỉ có 1 advisor thì luôn true
-      });
-
-      return manager.save(AdminClassAdvisor, record);
-    });
-  }
-
-  findAll() {
-    return `This action returns all adminClassAdvisor`;
-  }
-
-  findOne(id: number) {
-    return `This action returns a #${id} adminClassAdvisor`;
-  }
-
-  update(id: number, updateAdminClassAdvisorDto: UpdateAdminClassAdvisorDto) {
-    return `This action updates a #${id} adminClassAdvisor`;
-  }
-
-  remove(id: number) {
-    return `This action removes a #${id} adminClassAdvisor`;
-  }
+    remove(id: number) {
+        return `This action removes a #${id} adminClassAdvisor`;
+    }
 }

@@ -7,8 +7,9 @@ import {
 import { CreateBuildingDto } from './dto/create-building.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Building } from './entities/building.entity';
-import { Repository } from 'typeorm';
+import { ILike, Repository } from 'typeorm';
 import { Campus } from '@/campus/entities/campus.entity';
+import { buildAqpQueryOptions } from '@/helpers/func/buildAqpOptions';
 
 @Injectable()
 export class BuildingService {
@@ -29,38 +30,76 @@ export class BuildingService {
         }
 
         const hasFloors = createBuildingDto.has_floors ?? true;
+        const totalFloors = createBuildingDto.total_floors;
+        const code = createBuildingDto.code?.trim();
+        const name = createBuildingDto.name?.trim();
 
-        // ✅ VALIDATION LOGIC
-        if (hasFloors && !createBuildingDto.total_floors) {
-            throw new BadRequestException(
-                'total_floors is required when has_floors = true',
-            );
+        if (!code) {
+            throw new BadRequestException('Building code is required');
         }
 
-        if (!hasFloors && createBuildingDto.total_floors) {
-            throw new BadRequestException(
-                'total_floors must be null when has_floors = false',
-            );
+        if (!name) {
+            throw new BadRequestException('Building name is required');
         }
 
-        const existingBuilding = await this.buildingRepository.findOne({
+        if (hasFloors) {
+            if (totalFloors === null || totalFloors === undefined) {
+                throw new BadRequestException(
+                    'total_floors is required when has_floors = true',
+                );
+            }
+
+            if (totalFloors <= 0) {
+                throw new BadRequestException(
+                    'total_floors must be greater than 0 when has_floors = true',
+                );
+            }
+        } else {
+            if (
+                totalFloors !== null &&
+                totalFloors !== undefined &&
+                totalFloors !== 0
+            ) {
+                throw new BadRequestException(
+                    'total_floors must be null when has_floors = false',
+                );
+            }
+        }
+
+        const existingCode = await this.buildingRepository.findOne({
             where: {
-                code: createBuildingDto.code,
-                campus_id: campus_id,
+                campus_id,
+                code: ILike(code),
             },
         });
-        if (existingBuilding) {
+
+        if (existingCode) {
             throw new ConflictException(
                 'Building code already exists in this campus',
+            );
+        }
+
+        const existingName = await this.buildingRepository.findOne({
+            where: {
+                campus_id,
+                name: ILike(name),
+            },
+        });
+
+        if (existingName) {
+            throw new ConflictException(
+                'Building name already exists in this campus',
             );
         }
 
         const building = this.buildingRepository.create({
             ...createBuildingDto,
             campus_id,
-            has_floors: hasFloors,
-            total_floors: hasFloors ? createBuildingDto.total_floors : null,
             campus,
+            code,
+            name,
+            has_floors: hasFloors,
+            total_floors: hasFloors ? totalFloors : null,
         });
 
         try {
@@ -68,10 +107,56 @@ export class BuildingService {
         } catch (error: any) {
             if (error?.code === '23505') {
                 throw new ConflictException(
-                    'Building code already exists in this campus',
+                    'Building code or name already exists in this campus',
                 );
             }
             throw error;
         }
+    }
+
+    async findAll(currentPage: number, limit: number, qs: string) {
+        const {
+            where,
+            order,
+            offset,
+            limit: pageLimit,
+        } = buildAqpQueryOptions(qs, {
+            currentPage,
+            limit,
+            defaultLimit: 10,
+            textSearchFields: ['name', 'code'],
+            exactFields: ['campus_id', 'is_active'],
+            relationILike: {
+                campus: { relation: 'campus', field: 'name' },
+            },
+            ignoreFilters: ['current', 'pageSize'],
+            defaultSort: { createdAt: 'DESC' },
+        });
+
+        const totalItems = await this.buildingRepository.count({
+            where,
+        });
+
+        const totalPages = Math.ceil(totalItems / pageLimit);
+
+        const result = await this.buildingRepository.find({
+            where,
+            skip: offset,
+            take: pageLimit,
+            order,
+            relations: {
+                campus: true,
+            },
+        });
+
+        return {
+            meta: {
+                current: currentPage,
+                pageSize: pageLimit,
+                pages: totalPages,
+                total: totalItems,
+            },
+            result,
+        };
     }
 }

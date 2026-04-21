@@ -84,7 +84,7 @@ export class RoomsService {
             capacity: capacity ?? null,
             floor: finalFloor,
             type: type?.trim(),
-            is_active: true,
+            isActive: true,
         });
 
         return await this.roomsRepository.save(room);
@@ -116,6 +116,9 @@ export class RoomsService {
             skip: offset,
             take: pageLimit,
             order,
+            relations: {
+                building: true,
+            },
         });
 
         return {

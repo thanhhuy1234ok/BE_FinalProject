@@ -85,4 +85,33 @@ export class FacultyService {
     remove(id: number) {
         return `This action removes a #${id} faculty`;
     }
+
+    async getFacultyStats(facultyId: number) {
+        const countFaculty = await this.facultyRepository
+            .createQueryBuilder('faculty')
+            .leftJoin('faculty.departments', 'department')
+            .leftJoin('department.teachers', 'teacher')
+            .leftJoin('department.majors', 'major')
+            .leftJoin('major.students', 'student')
+            .where('faculty.id = :facultyId', { facultyId })
+            .select([
+                'faculty.id AS id',
+                'COUNT(DISTINCT department.id) AS "departmentCount"',
+                'COUNT(DISTINCT teacher.id) AS "teacherCount"',
+                'COUNT(DISTINCT student.id) AS "studentCount"',
+            ])
+            .groupBy('faculty.id')
+            .getRawOne();
+
+        const result = {
+            id: Number(countFaculty?.id || facultyId),
+            departmentCount: Number(countFaculty?.departmentCount || 0),
+            teacherCount: Number(countFaculty?.teacherCount || 0),
+            studentCount: Number(countFaculty?.studentCount || 0),
+        };
+
+        return {
+            result,
+        };
+    }
 }
