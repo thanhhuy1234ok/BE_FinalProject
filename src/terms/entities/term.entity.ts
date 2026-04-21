@@ -1,27 +1,44 @@
-import { Column, CreateDateColumn, DeleteDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { CourseOffering } from '@/course-offering/entities/course-offering.entity';
+import {
+    Column,
+    CreateDateColumn,
+    DeleteDateColumn,
+    Entity,
+    OneToMany,
+    PrimaryGeneratedColumn,
+    UpdateDateColumn,
+} from 'typeorm';
 
+export enum SemesterEnum {
+    HK1 = 'HK1',
+    HK2 = 'HK2',
+    SUMMER = 'SUMMER',
+}
 @Entity()
 export class Term {
     @PrimaryGeneratedColumn()
     id: number;
 
-    @Column()
-    name: string;
-
-    @Column()
-    code: string;
-
-    @Column()
-    startDate: Date;
-
-    @Column()
-    endDate: Date;
-
-    @Column()
+    @Column({ type: 'int' })
     year: number;
 
-    @Column()
-    semester: number;
+    @Column({
+        type: 'enum',
+        enum: SemesterEnum,
+    })
+    semester: SemesterEnum;
+
+    @Column({ type: 'date' })
+    startDate: Date;
+
+    @Column({ type: 'date' })
+    endDate: Date;
+
+    @OneToMany(() => CourseOffering, (courseOffering) => courseOffering.term)
+    courseOfferings: CourseOffering[];
+
+    @Column({ type: 'boolean', default: false })
+    isActive: boolean;
 
     @CreateDateColumn({ type: 'timestamp' })
     createdAt: Date;
@@ -30,5 +47,5 @@ export class Term {
     updatedAt: Date;
 
     @DeleteDateColumn({ type: 'timestamp', nullable: true })
-    deletedAt: Date;
+    deletedAt: Date | null;
 }

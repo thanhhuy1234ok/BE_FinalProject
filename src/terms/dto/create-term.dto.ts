@@ -1,11 +1,25 @@
-import { IsDate, IsDateString, IsInt, IsNumber, IsString, Max, Min } from "class-validator";
+import {
+    IsBoolean,
+    IsDate,
+    IsDateString,
+    IsEnum,
+    IsInt,
+    IsNumber,
+    IsOptional,
+    IsString,
+    Max,
+    Min,
+} from 'class-validator';
+import { SemesterEnum } from '../entities/term.entity';
 
 export class CreateTermDto {
-    @IsString()
-    name: string;
+    @IsInt()
+    @Min(2000)
+    @Max(2100)
+    year: number;
 
-    @IsString()
-    code: string;
+    @IsEnum(SemesterEnum)
+    semester: SemesterEnum;
 
     @IsDateString()
     startDate: string;
@@ -13,13 +27,7 @@ export class CreateTermDto {
     @IsDateString()
     endDate: string;
 
-    @IsInt()
-    year: number;
-
-    @IsInt()
-    @Min(1)
-    @Max(4)
-    semester: number;
-
-
+    @IsOptional()
+    @IsBoolean()
+    isActive?: boolean;
 }

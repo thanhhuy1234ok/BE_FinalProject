@@ -1,4 +1,5 @@
 import { Building } from '@/building/entities/building.entity';
+import { Schedule } from '@/schedules/entities/schedule.entity';
 import {
     Column,
     CreateDateColumn,
@@ -6,6 +7,7 @@ import {
     Entity,
     JoinColumn,
     ManyToOne,
+    OneToMany,
     PrimaryGeneratedColumn,
     UpdateDateColumn,
 } from 'typeorm';
@@ -40,7 +42,10 @@ export class Room {
     type?: string;
 
     @Column({ default: true })
-    is_active: boolean;
+    isActive: boolean;
+
+    @OneToMany(() => Schedule, (schedule) => schedule.room)
+    schedules: Schedule[];
 
     @CreateDateColumn()
     createdAt: Date;

@@ -22,36 +22,50 @@ import { CurriculumModule } from './curriculum/curriculum.module';
 import { CurriculumSubjectsModule } from './curriculum_subjects/curriculum_subjects.module';
 import { DepartmentsModule } from './departments/departments.module';
 import { FacultyModule } from './faculty/faculty.module';
+import { SchedulesModule } from './schedules/schedules.module';
+import { TeacherSubjectModule } from './teacher-subject/teacher-subject.module';
+import { CourseOfferingModule } from './course-offering/course-offering.module';
+import { LessonModule } from './lesson/lesson.module';
+import { CourseRegistrationModule } from './course-registration/course-registration.module';
+import { PaymentModule } from './payment/payment.module';
+import { PaymentItemModule } from './payment-item/payment-item.module';
 
 @Module({
-  imports: [
-    TypeOrmModule.forRootAsync({
-      useClass: TypeOrmConfigService,
-    }),
+    imports: [
+        TypeOrmModule.forRootAsync({
+            useClass: TypeOrmConfigService,
+        }),
 
-    ConfigModule.forRoot({
-      isGlobal: true,
-    }),
-    AuthModule,
-    UsersModule,
-    RolesModule,
-    MajorsModule,
-    YearOfAdmissionModule,
-    AdminClassModule,
-    DatabasesModule,
-    FileModule,
-    SubjectsModule,
-    TermsModule,
-    AdminClassAdvisorModule,
-    CampusModule,
-    BuildingModule,
-    RoomsModule,
-    CurriculumModule,
-    CurriculumSubjectsModule,
-    DepartmentsModule,
-    FacultyModule,
-  ],
-  controllers: [AppController],
-  providers: [AppService],
+        ConfigModule.forRoot({
+            isGlobal: true,
+        }),
+        AuthModule,
+        UsersModule,
+        RolesModule,
+        MajorsModule,
+        YearOfAdmissionModule,
+        AdminClassModule,
+        DatabasesModule,
+        FileModule,
+        SubjectsModule,
+        TermsModule,
+        AdminClassAdvisorModule,
+        CampusModule,
+        BuildingModule,
+        RoomsModule,
+        CurriculumModule,
+        CurriculumSubjectsModule,
+        DepartmentsModule,
+        FacultyModule,
+        SchedulesModule,
+        TeacherSubjectModule,
+        CourseOfferingModule,
+        LessonModule,
+        CourseRegistrationModule,
+        PaymentModule,
+        PaymentItemModule,
+    ],
+    controllers: [AppController],
+    providers: [AppService],
 })
 export class AppModule {}

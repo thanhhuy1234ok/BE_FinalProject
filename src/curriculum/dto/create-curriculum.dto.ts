@@ -1,6 +1,7 @@
 // src/curriculums/dto/create-curriculum.dto.ts
 import {
     IsArray,
+    IsBoolean,
     IsDateString,
     IsEnum,
     IsInt,
@@ -21,10 +22,6 @@ export class CreateCurriculumDto {
     yearOfAdmissionId: number;
 
     @IsOptional()
-    @IsString()
-    version?: string; // default v1 nếu không gửi
-
-    @IsOptional()
     @IsDateString()
     effective_from?: string;
 
@@ -39,10 +36,6 @@ export class CreateCurriculumDto {
     @IsOptional()
     @IsEnum(CurriculumStatus)
     status?: CurriculumStatus;
-
-    @IsOptional()
-    @IsString()
-    notes?: string;
 
     // ====== DANH SÁCH MÔN TRONG CTĐT ======
     //   @IsOptional()

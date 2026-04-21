@@ -13,6 +13,8 @@ import { YearOfAdmission } from '@/year-of-admission/entities/year-of-admission.
 import { Teacher } from '@/users/entities/teacher.entity';
 import { normalizeMajorCode, toKCode } from '@/helpers/func/previewCode';
 import { buildAqpQueryOptions } from '@/helpers/func/buildAqpOptions';
+import { AdminClassStatus } from '@/helpers/enum/enum.global';
+import { AdminClassAdvisor } from '@/admin-class-advisor/entities/admin-class-advisor.entity';
 
 @Injectable()
 export class AdminClassService {
@@ -28,6 +30,9 @@ export class AdminClassService {
 
         @InjectRepository(Teacher)
         private readonly teacherRepo: Repository<Teacher>,
+
+        @InjectRepository(AdminClassAdvisor)
+        private readonly adminClassAdvisorRepository: Repository<AdminClassAdvisor>,
     ) {}
     async create(dto: CreateAdminClassDto) {
         const {
@@ -38,7 +43,7 @@ export class AdminClassService {
             homeroomTeacherId,
         } = dto;
 
-        // 1) Generate code + suggestedName (đã check major/year tồn tại ở trong hàm)
+        // 1) Generate code + suggestedName
         const { code, suggestedName } = await this.buildAdminClassCode(
             major_id,
             yearOfAdmissionId,
@@ -47,13 +52,15 @@ export class AdminClassService {
         // 2) name: nếu FE không nhập => dùng suggestedName
         const finalName = name?.trim() ? name.trim() : suggestedName;
 
-        // 3) Optional check teacher (nếu bạn vẫn giữ homeroomTeacherId)
+        // 3) Optional check teacher
         if (homeroomTeacherId) {
             const teacher = await this.teacherRepo.findOne({
                 where: { id: homeroomTeacherId },
             });
-            if (!teacher)
+
+            if (!teacher) {
                 throw new NotFoundException('Homeroom teacher not found');
+            }
         }
 
         const adminClass = this.adminClassRepository.create({
@@ -62,14 +69,39 @@ export class AdminClassService {
             capacity: capacity ?? 50,
             major_id,
             yearOfAdmissionId,
-            isActive: true,
+            status: AdminClassStatus.PENDING,
         });
 
-        // 4) Save + handle race condition unique(code)
         try {
-            return await this.adminClassRepository.save(adminClass);
+            const savedAdminClass =
+                await this.adminClassRepository.save(adminClass);
+
+            // 4) Nếu có GVCN thì tạo link advisor
+            if (homeroomTeacherId) {
+                const advisorLink = this.adminClassAdvisorRepository.create({
+                    adminClassId: savedAdminClass.id,
+                    teacherId: homeroomTeacherId,
+                    isPrimary: true,
+                    startAt: new Date(),
+                    endAt: null,
+                });
+
+                await this.adminClassRepository.save(advisorLink);
+            }
+
+            return await this.adminClassRepository.findOne({
+                where: { id: savedAdminClass.id },
+                relations: {
+                    major: true,
+                    yearOfAdmission: true,
+                    advisorLinks: {
+                        teacher: {
+                            user: true,
+                        },
+                    },
+                },
+            });
         } catch (e: any) {
-            // Postgres unique violation
             if (e?.code === '23505') {
                 throw new BadRequestException(
                     'Generated class code already exists. Please try again.',
@@ -83,45 +115,193 @@ export class AdminClassService {
         return this.buildAdminClassCode(majorId, yearOfAdmissionId);
     }
 
+    // async findAll(currentPage: number, limit: number, qs: string) {
+    //     const {
+    //         where,
+    //         order,
+    //         offset,
+    //         limit: pageLimit,
+    //     } = buildAqpQueryOptions(qs, {
+    //         currentPage,
+    //         limit,
+    //         defaultLimit: 10,
+    //         textSearchFields: ['name', 'code'],
+    //         exactFields: ['isActive'],
+    //         ignoreFilters: ['current', 'pageSize'],
+    //         defaultSort: { createdAt: 'DESC' },
+    //     });
+
+    //     const totalItems = await this.adminClassRepository.count({ where });
+
+    //     const totalPages = Math.ceil(totalItems / pageLimit);
+
+    //     const result = await this.adminClassRepository.find({
+    //         where,
+    //         skip: offset,
+    //         take: pageLimit,
+    //         order,
+    //         relations: {
+    //             yearOfAdmission: true,
+    //             major: true,
+    //             students: true,
+    //         },
+    //     });
+
+    //     const data = result.map((item) => ({
+    //         ...item,
+    //         currentStudentCount: item.students?.length ?? 0,
+    //     }));
+
+    //     return {
+    //         meta: {
+    //             current: currentPage,
+    //             pageSize: pageLimit,
+    //             pages: totalPages,
+    //             total: totalItems,
+    //         },
+    //         result: data,
+    //     };
+    // }
     async findAll(currentPage: number, limit: number, qs: string) {
-        const {
-            where,
-            order,
-            offset,
-            limit: pageLimit,
-        } = buildAqpQueryOptions(qs, {
-            currentPage,
-            limit,
-            defaultLimit: 10,
-            textSearchFields: ['name', 'code'],
-            exactFields: ['isActive'],
-            ignoreFilters: ['current', 'pageSize'],
-            defaultSort: { createdAt: 'DESC' },
-        });
+        const queryParams = new URLSearchParams(qs);
 
-        const totalItems = await this.adminClassRepository.count({ where });
+        const termId = queryParams.get('termId');
+        const keyword = queryParams.get('keyword')?.trim();
+        const status = queryParams.get('status');
+        const isActive = queryParams.get('isActive');
+        const subjectId = queryParams.get('subjectId');
+        const teacherSubjectId = queryParams.get('teacherSubjectId');
 
-        const totalPages = Math.ceil(totalItems / pageLimit);
+        const page = Number(currentPage) > 0 ? Number(currentPage) : 1;
+        const pageSize = Number(limit) > 0 ? Number(limit) : 10;
+        const skip = (page - 1) * pageSize;
 
-        const result = await this.adminClassRepository.find({
-            where,
-            skip: offset,
-            take: pageLimit,
-            order,
-        });
+        const qb = this.adminClassRepository
+            .createQueryBuilder('adminClass')
+            .leftJoinAndSelect('adminClass.yearOfAdmission', 'yearOfAdmission')
+            .leftJoinAndSelect('adminClass.major', 'major')
+            .leftJoinAndSelect('adminClass.students', 'students');
+
+        if (keyword) {
+            qb.andWhere(
+                '(adminClass.name ILIKE :keyword OR adminClass.code ILIKE :keyword)',
+                {
+                    keyword: `%${keyword}%`,
+                },
+            );
+        }
+
+        if (status) {
+            qb.andWhere('adminClass.status = :status', { status });
+        }
+
+        if (isActive !== null && isActive !== undefined && isActive !== '') {
+            qb.andWhere('adminClass.isActive = :isActive', {
+                isActive: isActive === 'true',
+            });
+        }
+
+        /**
+         * Logic đúng:
+         * - Nếu chỉ có termId: vẫn có thể lấy tất cả lớp, hoặc chỉ lọc theo kỳ nếu bạn muốn
+         * - Nếu có termId + subjectId: ẩn lớp đã có course offering của chính subject đó trong kỳ đó
+         * - Nếu có termId + teacherSubjectId: ẩn lớp đã có course offering của subject thuộc teacherSubject đó trong kỳ đó
+         */
+        if (termId && subjectId) {
+            qb.andWhere((subQb) => {
+                const subQuery = subQb
+                    .subQuery()
+                    .select('co.adminClassId')
+                    .from('course_offerings', 'co')
+                    .innerJoin(
+                        'teacher_subject',
+                        'ts',
+                        'ts.id = co.teacherSubjectId',
+                    )
+                    .where('co.termId = :termId', { termId: Number(termId) })
+                    .andWhere('ts.subjectId = :subjectId', {
+                        subjectId: Number(subjectId),
+                    })
+                    .andWhere('co.adminClassId = adminClass.id')
+                    .getQuery();
+
+                return `NOT EXISTS ${subQuery}`;
+            });
+        } else if (termId && teacherSubjectId) {
+            qb.andWhere((subQb) => {
+                const subQuery = subQb
+                    .subQuery()
+                    .select('co.adminClassId')
+                    .from('course_offerings', 'co')
+                    .innerJoin(
+                        'teacher_subject',
+                        'ts_existing',
+                        'ts_existing.id = co.teacherSubjectId',
+                    )
+                    .innerJoin(
+                        'teacher_subject',
+                        'ts_selected',
+                        'ts_selected.id = :teacherSubjectId',
+                        { teacherSubjectId: Number(teacherSubjectId) },
+                    )
+                    .where('co.termId = :termId', { termId: Number(termId) })
+                    .andWhere('ts_existing.subjectId = ts_selected.subjectId')
+                    .andWhere('co.adminClassId = adminClass.id')
+                    .getQuery();
+
+                return `NOT EXISTS ${subQuery}`;
+            });
+        }
+
+        qb.orderBy('adminClass.createdAt', 'DESC').skip(skip).take(pageSize);
+
+        const [result, totalItems] = await qb.getManyAndCount();
+
+        const totalPages = Math.ceil(totalItems / pageSize);
+
+        const data = result.map((item) => ({
+            ...item,
+            currentStudentCount: item.students?.length ?? 0,
+        }));
 
         return {
             meta: {
-                current: currentPage,
-                pageSize: pageLimit,
+                current: page,
+                pageSize,
                 pages: totalPages,
                 total: totalItems,
             },
-            result,
+            result: data,
         };
     }
-    findOne(id: number) {
-        return `This action returns a #${id} adminClass`;
+    async findOne(id: number) {
+        const adminClass = await this.adminClassRepository.findOne({
+            where: { id },
+            relations: {
+                major: true,
+                yearOfAdmission: true,
+                students: {
+                    user: true, // nếu student có relation user
+                },
+            },
+        });
+
+        if (!adminClass) {
+            throw new NotFoundException(`Không tìm thấy lớp với id = ${id}`);
+        }
+
+        // format lại dữ liệu cho FE dễ dùng
+        const result = {
+            ...adminClass,
+            studentCount: adminClass.students?.length ?? 0,
+            students: adminClass.students?.map((s) => ({
+                id: s.id,
+                name: s.user?.name,
+                email: s.user?.email,
+            })),
+        };
+
+        return result;
     }
 
     update(id: number, updateAdminClassDto: UpdateAdminClassDto) {

@@ -70,8 +70,28 @@ export class MajorsService {
         };
     }
 
-    findOne(id: number) {
-        return this.majorRepository.findOne({ where: { id } });
+    async findOne(id: number) {
+        const major = await this.majorRepository.findOne({
+            where: { id },
+            relations: {
+                department: {
+                    faculty: true,
+                },
+                adminClasses: {
+                    yearOfAdmission: true,
+                },
+                curriculums: {
+                    yearOfAdmission: true,
+                },
+                students: true,
+            },
+        });
+
+        if (!major) {
+            throw new NotFoundException('Không tìm thấy chuyên ngành');
+        }
+
+        return major;
     }
 
     async update(id: number, updateMajorDto: UpdateMajorDto) {

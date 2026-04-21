@@ -1,4 +1,6 @@
 import { AdminClassAdvisor } from '@/admin-class-advisor/entities/admin-class-advisor.entity';
+import { CourseOffering } from '@/course-offering/entities/course-offering.entity';
+import { AdminClassStatus } from '@/helpers/enum/enum.global';
 import { Major } from '@/majors/entities/major.entity';
 import { Student } from '@/users/entities/student.entity';
 import { YearOfAdmission } from '@/year-of-admission/entities/year-of-admission.entity';
@@ -20,36 +22,50 @@ export class AdminClass {
     id: number;
 
     @Column({ unique: true })
-    code: string; // "CNTT_K23_01"
+    code: string; // CNTT_K23_01
 
     @Column()
-    name: string; // "Công nghệ thông tin K23 lớp 1"
+    name: string; // Công nghệ thông tin K23 lớp 1
 
-    @Column({ default: 50 })
+    @Column({ type: 'int', default: 50 })
     capacity: number;
 
-    @Column()
+    @Column({ type: 'int' })
     major_id: number;
 
-    @ManyToOne(() => Major, (major) => major.adminClasses)
+    @ManyToOne(() => Major, (major) => major.adminClasses, {
+        onDelete: 'RESTRICT',
+    })
     @JoinColumn({ name: 'major_id' })
     major: Major;
 
-    @Column()
+    @Column({ type: 'int' })
     yearOfAdmissionId: number;
 
-    @ManyToOne(() => YearOfAdmission, (year) => year.adminClasses)
+    @ManyToOne(() => YearOfAdmission, (year) => year.adminClasses, {
+        onDelete: 'RESTRICT',
+    })
     @JoinColumn({ name: 'yearOfAdmissionId' })
     yearOfAdmission: YearOfAdmission;
 
-    @OneToMany(() => AdminClassAdvisor, (x) => x.adminClass)
+    @OneToMany(() => AdminClassAdvisor, (advisorLink) => advisorLink.adminClass)
     advisorLinks: AdminClassAdvisor[];
-
-    @Column({ default: true })
-    isActive: boolean;
 
     @OneToMany(() => Student, (student) => student.adminClass)
     students: Student[];
+
+    @Column({
+        type: 'enum',
+        enum: AdminClassStatus,
+        default: AdminClassStatus.PENDING,
+    })
+    status: AdminClassStatus;
+
+    @OneToMany(
+        () => CourseOffering,
+        (courseOffering) => courseOffering.adminClass,
+    )
+    courseOfferings: CourseOffering[];
 
     @CreateDateColumn({ type: 'timestamp' })
     createdAt: Date;
@@ -58,5 +74,5 @@ export class AdminClass {
     updatedAt: Date;
 
     @DeleteDateColumn({ type: 'timestamp', nullable: true })
-    deletedAt: Date;
+    deletedAt: Date | null;
 }

@@ -48,9 +48,6 @@ export class Curriculum {
     @Column({ type: 'varchar', length: 255 })
     name: string; // VD: Chương trình đào tạo CNTT K24
 
-    @Column({ type: 'varchar', length: 20, default: 'v1' })
-    version: string; // v1, v2...
-
     @Column({ type: 'date', nullable: true })
     effective_from: string | null;
 
@@ -66,9 +63,6 @@ export class Curriculum {
         default: CurriculumStatus.DRAFT,
     })
     status: CurriculumStatus;
-
-    @Column({ type: 'text', nullable: true })
-    notes?: string;
 
     @Column({ type: 'boolean', default: true })
     is_active: boolean;

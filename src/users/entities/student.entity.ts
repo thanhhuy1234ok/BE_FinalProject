@@ -3,6 +3,7 @@ import {
     Entity,
     JoinColumn,
     ManyToOne,
+    OneToMany,
     OneToOne,
     PrimaryGeneratedColumn,
 } from 'typeorm';
@@ -10,6 +11,7 @@ import { User } from './user.entity';
 import { Major } from '@/majors/entities/major.entity';
 import { YearOfAdmission } from '@/year-of-admission/entities/year-of-admission.entity';
 import { AdminClass } from '@/admin-class/entities/admin-class.entity';
+import { CourseRegistration } from '@/course-registration/entities/course-registration.entity';
 
 @Entity('students')
 export class Student {
@@ -47,4 +49,10 @@ export class Student {
     @ManyToOne(() => AdminClass, (cls) => cls.students)
     @JoinColumn({ name: 'adminClassId' })
     adminClass?: AdminClass;
+
+    @OneToMany(
+        () => CourseRegistration,
+        (courseRegistration) => courseRegistration.student,
+    )
+    courseRegistrations: CourseRegistration[];
 }

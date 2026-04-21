@@ -50,7 +50,7 @@ export class AuthService {
             id,
             name,
             email,
-            role: { id: roles.id, name: roles.name },
+            role_id,
         };
 
         //set refresh_token cookies

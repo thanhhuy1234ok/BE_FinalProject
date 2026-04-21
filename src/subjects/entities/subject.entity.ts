@@ -1,5 +1,7 @@
+import { CourseOffering } from '@/course-offering/entities/course-offering.entity';
 import { CurriculumSubject } from '@/curriculum_subjects/entities/curriculum_subject.entity';
 import { Department } from '@/departments/entities/department.entity';
+import { TeacherSubject } from '@/teacher-subject/entities/teacher-subject.entity';
 import {
     Column,
     CreateDateColumn,
@@ -38,6 +40,9 @@ export class Subject {
     @ManyToOne(() => Department, (dept) => dept.subjects)
     @JoinColumn({ name: 'department_id' })
     department: Department;
+
+    @OneToMany(() => TeacherSubject, (ts) => ts.subject)
+    teacherSubjects: TeacherSubject[];
 
     @CreateDateColumn({ type: 'timestamp' })
     createdAt: Date;
