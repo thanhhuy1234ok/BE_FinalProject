@@ -23,6 +23,7 @@ import {
     RegistrationStatus,
 } from '@/helpers/enum/enum.global';
 import { CourseRegistration } from '@/course-registration/entities/course-registration.entity';
+import { ConversationMember } from '@/chat-app/entities/conversation-member.entity';
 
 @Injectable()
 export class CourseOfferingService {
@@ -35,6 +36,9 @@ export class CourseOfferingService {
 
         @InjectRepository(Term)
         private termsRepository: Repository<Term>,
+
+        @InjectRepository(ConversationMember)
+        private readonly conversationMemberRepository: Repository<ConversationMember>,
 
         @InjectRepository(AdminClass)
         private readonly adminClassRepository: Repository<AdminClass>,
@@ -177,151 +181,6 @@ export class CourseOfferingService {
             });
         });
     }
-    // async create(createCourseOfferingDto: CreateCourseOfferingDto) {
-    //     const {
-    //         teacherSubjectId,
-    //         termId,
-    //         adminClassId,
-    //         maxStudents = 60,
-    //     } = createCourseOfferingDto;
-
-    //     const teacherSubject = await this.teacherSubjectRepository.findOne({
-    //         where: { id: teacherSubjectId },
-    //         relations: {
-    //             teacher: true,
-    //             subject: true,
-    //         },
-    //     });
-
-    //     if (!teacherSubject) {
-    //         throw new NotFoundException(
-    //             'Không tìm thấy phân công giảng dạy cho giảng viên và môn học',
-    //         );
-    //     }
-
-    //     const term = await this.termsRepository.findOne({
-    //         where: { id: termId },
-    //     });
-
-    //     if (!term) {
-    //         throw new NotFoundException('Không tìm thấy học kỳ');
-    //     }
-
-    //     let adminClass: AdminClass | null = null;
-    //     if (adminClassId != null) {
-    //         adminClass = await this.adminClassRepository.findOne({
-    //             where: { id: adminClassId },
-    //         });
-
-    //         if (!adminClass) {
-    //             throw new NotFoundException('Không tìm thấy lớp hành chính');
-    //         }
-
-    //         if (adminClass.status === AdminClassStatus.GRADUATED) {
-    //             throw new BadRequestException(
-    //                 'Không thể tạo lớp học phần cho lớp hành chính đã tốt nghiệp',
-    //             );
-    //         }
-    //     }
-
-    //     if (maxStudents <= 0) {
-    //         throw new BadRequestException('Sĩ số tối đa phải lớn hơn 0');
-    //     }
-
-    //     const subjectCode = teacherSubject.subject?.code?.trim();
-    //     if (!subjectCode) {
-    //         throw new BadRequestException(
-    //             'Môn học chưa có mã môn, không thể tự sinh mã lớp học phần',
-    //         );
-    //     }
-
-    //     const code = await this.generateCourseOfferingCode(
-    //         subjectCode,
-    //         term.semester,
-    //         term.year,
-    //     );
-
-    //     const courseOffering = this.courseOfferingRepository.create({
-    //         code,
-    //         teacherSubjectId,
-    //         termId,
-    //         adminClassId: adminClassId ?? null,
-    //         maxStudents,
-    //         enrolledCount: 0,
-    //         status: CourseOfferingStatus.CREATED,
-    //     });
-
-    //     try {
-    //         return await this.courseOfferingRepository.save(courseOffering);
-    //     } catch (error: any) {
-    //         if (error?.code === '23505') {
-    //             throw new ConflictException(
-    //                 'Mã lớp học phần vừa được tạo đã bị trùng. Vui lòng thử lại',
-    //             );
-    //         }
-    //         throw error;
-    //     }
-    // }
-
-    // async findAll(currentPage: number, limit: number, qs: string) {
-    //     const {
-    //         where,
-    //         order,
-    //         offset,
-    //         limit: pageLimit,
-    //     } = buildAqpQueryOptions(qs, {
-    //         currentPage,
-    //         limit,
-    //         defaultLimit: 10,
-    //         exactFields: [
-    //             'teacherSubjectId',
-    //             'termId',
-    //             'adminClassId',
-    //             'isActive',
-    //         ],
-    //         relationILike: {
-    //             adminClass: { relation: 'adminClass', field: 'name' },
-    //             term: { relation: 'term', field: 'semester' },
-    //         },
-    //         ignoreFilters: ['current', 'pageSize'],
-    //         defaultSort: { id: 'DESC' },
-    //     });
-
-    //     const totalItems = await this.courseOfferingRepository.count({
-    //         where,
-    //         withDeleted: true,
-    //     });
-
-    //     const totalPages = Math.ceil(totalItems / pageLimit);
-
-    //     const result = await this.courseOfferingRepository.find({
-    //         where,
-    //         skip: offset,
-    //         take: pageLimit,
-    //         withDeleted: true,
-    //         order,
-    //         relations: {
-    //             term: true,
-    //             adminClass: true,
-    //             teacherSubject: {
-    //                 teacher: {
-    //                     user: true,
-    //                 },
-    //                 subject: true,
-    //             },
-    //         },
-    //     });
-
-    //     return {
-    //         meta: {
-    //             current: currentPage,
-    //             pageSize: pageLimit,
-    //             pages: totalPages,
-    //             total: totalItems,
-    //         },
-    //         result,
-    //     };
-    // }
     async findAll(currentPage: number, limit: number, qs: string) {
         const queryParams = new URLSearchParams(qs);
 
@@ -628,13 +487,6 @@ export class CourseOfferingService {
 
         return courseOffering;
     }
-    update(id: number, updateCourseOfferingDto: UpdateCourseOfferingDto) {
-        return `This action updates a #${id} courseOffering`;
-    }
-
-    remove(id: number) {
-        return `This action removes a #${id} courseOffering`;
-    }
 
     private async generateCourseOfferingCode(
         subjectCode: string,
@@ -662,5 +514,140 @@ export class CourseOfferingService {
             matchedNumbers.length > 0 ? Math.max(...matchedNumbers) + 1 : 1;
 
         return `${prefix}-${String(nextNumber).padStart(2, '0')}`;
+    }
+
+    async getMyTeachingCourses(userId: string, termId?: number) {
+        const teacher = await this.teacherSubjectRepository.findOne({
+            where: {
+                teacher: {
+                    user_id: userId,
+                },
+            },
+            relations: {
+                teacher: {
+                    user: true,
+                },
+            },
+        });
+
+        if (!teacher) {
+            throw new NotFoundException('Không tìm thấy giáo viên');
+        }
+
+        const termWhere = termId ? { id: termId } : { isActive: true };
+
+        const courses = await this.courseOfferingRepository.find({
+            where: {
+                teacherSubject: {
+                    teacher: {
+                        id: teacher.teacher.id,
+                    },
+                },
+                term: termWhere,
+            },
+            relations: {
+                term: true,
+                adminClass: true,
+                schedules: {
+                    room: true,
+                },
+                teacherSubject: {
+                    teacher: {
+                        user: true,
+                    },
+                    subject: true,
+                },
+            },
+            order: {
+                term: {
+                    year: 'DESC',
+                },
+                id: 'DESC',
+            },
+        });
+
+        if (!courses.length) {
+            return [];
+        }
+
+        const courseIds = courses.map((item) => item.id);
+
+        const members = await this.conversationMemberRepository
+            .createQueryBuilder('member')
+            .innerJoin('member.conversation', 'conversation')
+            .where('member.user_id = :userId', { userId })
+            .andWhere('conversation.type = :type', { type: 'COURSE' })
+            .andWhere('conversation.course_offering_id IN (:...courseIds)', {
+                courseIds,
+            })
+            .select('conversation.course_offering_id', 'courseOfferingId')
+            .addSelect('member.unread_count', 'unreadCount')
+            .getRawMany();
+
+        const unreadMap = new Map<number, number>();
+
+        for (const item of members) {
+            unreadMap.set(
+                Number(item.courseOfferingId),
+                Number(item.unreadCount || 0),
+            );
+        }
+
+        return courses.map((course) => ({
+            ...course,
+            unreadCount: unreadMap.get(course.id) || 0,
+        }));
+    }
+
+    async getMyTeachingCourseDetail(userId: string, courseOfferingId: number) {
+        const teacher = await this.teacherSubjectRepository.findOne({
+            where: {
+                teacher: { user_id: userId },
+            },
+            relations: {
+                teacher: {
+                    user: true,
+                },
+            },
+        });
+
+        if (!teacher) {
+            throw new NotFoundException('Không tìm thấy giáo viên');
+        }
+
+        const course = await this.courseOfferingRepository.findOne({
+            where: {
+                id: courseOfferingId,
+                teacherSubject: {
+                    teacher: {
+                        id: teacher.teacher.id,
+                    },
+                },
+            },
+            relations: {
+                term: true,
+                adminClass: true,
+                schedules: {
+                    room: true,
+                },
+                teacherSubject: {
+                    teacher: {
+                        user: true,
+                    },
+                    subject: true,
+                },
+                courseRegistrations: {
+                    student: {
+                        user: true,
+                    },
+                },
+            },
+        });
+
+        if (!course) {
+            throw new NotFoundException('Không tìm thấy lớp học');
+        }
+
+        return course;
     }
 }

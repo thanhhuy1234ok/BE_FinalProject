@@ -2,60 +2,71 @@ import {
     Controller,
     Get,
     Post,
-    Body,
     Patch,
     Param,
-    Delete,
-    Req,
     ParseIntPipe,
+    Query,
+    Body,
+    Req,
+    Res,
 } from '@nestjs/common';
 import { PaymentService } from './payment.service';
-import { ResponseMessage } from '@/helpers/decorator/customize';
-import { PayPaymentDto } from './dto/create-payment.dto';
-
-@Controller('payment')
+import { Public, ResponseMessage, User } from '@/helpers/decorator/customize';
+import type { IUser } from '@/helpers/types/user.interface';
+import type { Request, Response } from 'express';
+import { ConfigService } from '@nestjs/config';
+@Controller('payments')
 export class PaymentController {
-    constructor(private readonly paymentsService: PaymentService) {}
+    constructor(
+        private readonly paymentService: PaymentService,
+        private configService: ConfigService,
+    ) {}
 
-    @Post('registrations/:registrationId/attach')
-    @ResponseMessage('Cập nhật phiếu thanh toán thành công')
-    attachRegistrationToPayment(
-        @Param('registrationId', ParseIntPipe) registrationId: number,
+    @Get('registered-courses')
+    getRegisteredCoursesForPayment(@User() user: IUser) {
+        return this.paymentService.getRegisteredCoursesForPayment(user.id);
+    }
+
+    @Post(':paymentId/vnpay/create-url')
+    createVNPayUrl(
+        @Req() req: Request,
+        @Param('paymentId', ParseIntPipe) paymentId: number,
     ) {
-        return this.paymentsService.attachRegistrationToPayment(registrationId);
+        const forwarded = req.headers['x-forwarded-for'];
+
+        let ip =
+            typeof forwarded === 'string'
+                ? forwarded.split(',')[0].trim()
+                : req.socket?.remoteAddress || '127.0.0.1';
+
+        // normalize IPv6
+        if (ip === '::1') ip = '127.0.0.1';
+        if (ip.startsWith('::ffff:')) ip = ip.replace('::ffff:', '');
+
+        const finalIp = ip;
+
+        return this.paymentService.createVnpayUrl(paymentId, finalIp);
     }
 
-    @Patch('registrations/:registrationId/cancel')
-    @ResponseMessage('Hủy đăng ký môn thành công')
-    cancelRegistrationAndUpdatePayment(
-        @Req() req: any,
-        @Param('registrationId', ParseIntPipe) registrationId: number,
+    @Post('invoice')
+    createInvoice(@User() user: IUser) {
+        return this.paymentService.createInvoice(user.id);
+    }
+
+    @Public()
+    @Get('vnpay/return-url')
+    async vnpayReturn(
+        @Query() query: Record<string, string>,
+        @Res() res: Response,
     ) {
-        return this.paymentsService.cancelRegistrationAndUpdatePayment(
-            req.user.id,
-            registrationId,
-        );
-    }
+        const result = await this.paymentService.handleVnpayReturn(query);
 
-    @Get('my-current')
-    @ResponseMessage('Lấy phiếu thanh toán hiện tại thành công')
-    getMyCurrent(@Req() req: any) {
-        return this.paymentsService.getMyCurrent(req.user.id);
-    }
+        const feUrl =
+            this.configService.get<string>('FRONT_END_URL') ||
+            'http://localhost:3000';
 
-    @Get(':id')
-    @ResponseMessage('Lấy chi tiết phiếu thanh toán thành công')
-    getDetail(@Param('id', ParseIntPipe) id: number) {
-        return this.paymentsService.getPaymentDetail(id);
-    }
+        const redirectUrl = `${feUrl}/vn-pay/return-url?paymentId=${result.paymentId}&status=${result.status}&responseCode=${result.responseCode}`;
 
-    @Patch(':id/pay')
-    @ResponseMessage('Thanh toán thành công')
-    pay(
-        @Req() req: any,
-        @Param('id', ParseIntPipe) id: number,
-        @Body() dto: PayPaymentDto,
-    ) {
-        return this.paymentsService.pay(req.user.id, id, dto);
+        return res.redirect(redirectUrl);
     }
 }

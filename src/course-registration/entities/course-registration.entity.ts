@@ -1,28 +1,48 @@
-import { CourseOffering } from '@/course-offering/entities/course-offering.entity';
 import { RegistrationStatus } from '@/helpers/enum/enum.global';
+import { CourseOffering } from '@/course-offering/entities/course-offering.entity';
+import { PaymentItem } from '@/payment-item/entities/payment-item.entity';
 import { Student } from '@/users/entities/student.entity';
 import {
     Column,
     CreateDateColumn,
     Entity,
+    Index,
     JoinColumn,
     ManyToOne,
+    OneToOne,
     PrimaryGeneratedColumn,
-    Unique,
     UpdateDateColumn,
 } from 'typeorm';
 
 @Entity('course_registrations')
-@Unique(['studentId', 'courseOfferingId'])
+@Index(['studentId', 'courseOfferingId'], { unique: true })
+@Index(['studentId', 'status'])
 export class CourseRegistration {
     @PrimaryGeneratedColumn()
     id: number;
 
-    @Column()
+    @Column({ name: 'student_id' })
     studentId: number;
 
-    @Column()
+    @ManyToOne(() => Student, (student) => student.courseRegistrations, {
+        nullable: false,
+        onDelete: 'CASCADE',
+    })
+    @JoinColumn({ name: 'student_id' })
+    student: Student;
+
+    @Column({ name: 'course_offering_id' })
     courseOfferingId: number;
+
+    @ManyToOne(() => CourseOffering, {
+        nullable: false,
+        onDelete: 'RESTRICT',
+    })
+    @JoinColumn({ name: 'course_offering_id' })
+    courseOffering: CourseOffering;
+
+    @OneToOne(() => PaymentItem, (paymentItem) => paymentItem.registration)
+    paymentItem: PaymentItem;
 
     @Column({
         type: 'enum',
@@ -31,25 +51,23 @@ export class CourseRegistration {
     })
     status: RegistrationStatus;
 
-    @ManyToOne(() => Student, (student) => student.courseRegistrations, {
-        onDelete: 'CASCADE',
+    @Column({
+        type: 'timestamp',
+        name: 'registered_at',
+        default: () => 'CURRENT_TIMESTAMP',
     })
-    @JoinColumn({ name: 'studentId' })
-    student: Student;
+    registeredAt: Date;
 
-    @ManyToOne(
-        () => CourseOffering,
-        (courseOffering) => courseOffering.courseRegistrations,
-        {
-            onDelete: 'CASCADE',
-        },
-    )
-    @JoinColumn({ name: 'courseOfferingId' })
-    courseOffering: CourseOffering;
+    @Column({
+        type: 'timestamp',
+        name: 'cancelled_at',
+        nullable: true,
+    })
+    cancelledAt: Date | null;
 
-    @CreateDateColumn()
+    @CreateDateColumn({ name: 'created_at' })
     createdAt: Date;
 
-    @UpdateDateColumn()
+    @UpdateDateColumn({ name: 'updated_at' })
     updatedAt: Date;
 }

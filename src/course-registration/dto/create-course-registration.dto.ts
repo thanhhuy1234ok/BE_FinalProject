@@ -1,18 +1,27 @@
 import { Type } from 'class-transformer';
-import { IsArray, IsInt, IsOptional, Min } from 'class-validator';
+import {
+    ArrayNotEmpty,
+    IsArray,
+    IsInt,
+    IsNumber,
+    IsOptional,
+    Min,
+} from 'class-validator';
 
 export class CreateCourseRegistrationDto {
-    @IsInt()
-    @Min(1)
-    courseOfferingId: number;
+    @IsArray()
+    @ArrayNotEmpty() // ✅ không cho gửi []
+    @IsInt({ each: true })
+    @Type(() => Number) // 🔥 QUAN TRỌNG (transform string -> number)
+    courseOfferingIds: number[];
 }
 
 export class CheckCourseRegistrationConflictDto {
-    @IsInt()
+    @IsNumber()
     courseOfferingId: number;
 
     @IsOptional()
     @IsArray()
-    @Type(() => Number)
+    @IsNumber({}, { each: true })
     selectedCourseOfferingIds?: number[];
 }

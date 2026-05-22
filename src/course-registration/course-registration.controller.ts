@@ -16,7 +16,7 @@ import {
     CreateCourseRegistrationDto,
 } from './dto/create-course-registration.dto';
 import { UpdateCourseRegistrationDto } from './dto/update-course-registration.dto';
-import { User } from '@/helpers/decorator/customize';
+import { ResponseMessage, User } from '@/helpers/decorator/customize';
 import type { IUser } from '@/helpers/types/user.interface';
 
 @Controller('course-registrations')
@@ -24,42 +24,19 @@ export class CourseRegistrationController {
     constructor(
         private readonly courseRegistrationService: CourseRegistrationService,
     ) {}
-    // @Get('available')
-    // async available(@Req() req: any, @Query('termId') termId?: string) {
-    //     return this.courseRegistrationService.availableCourseOfferings(
-    //         req.user.id,
-    //         termId ? +termId : undefined,
-    //     );
-    // }
 
-    @Get('available')
-    async getAvailableForStudent(
-        @Query('current') current = '1',
-        @Query('pageSize') pageSize = '10',
-        @Query() query: Record<string, string>,
+    @Post('register')
+    registerMany(
         @User() user: IUser,
+        @Body() dto: CreateCourseRegistrationDto,
     ) {
-        const qs = new URLSearchParams(query).toString();
-
-        return this.courseRegistrationService.getAvailableForStudent(
-            user.id,
-            +current,
-            +pageSize,
-            qs,
-        );
+        return this.courseRegistrationService.registerMany(user.id, dto);
     }
 
-    @Get('my')
-    async myRegistrations(@Req() req: any, @Query('termId') termId?: string) {
-        return this.courseRegistrationService.myRegistrations(
-            req.user.id,
-            termId ? +termId : undefined,
-        );
-    }
-
-    @Post()
-    async register(@Req() req: any, @Body() dto: CreateCourseRegistrationDto) {
-        return this.courseRegistrationService.register(req.user.id, dto);
+    @Get('open-offerings')
+    @ResponseMessage('Lấy danh sách lớp học phần đang mở thành công')
+    getOpenOfferings(@User() user: IUser) {
+        return this.courseRegistrationService.getOpenOfferings(user.id);
     }
 
     @Post('check-conflict')
@@ -70,8 +47,31 @@ export class CourseRegistrationController {
         return this.courseRegistrationService.checkConflict(user.id, dto);
     }
 
-    @Delete(':id')
-    async cancel(@Req() req: any, @Param('id', ParseIntPipe) id: number) {
-        return this.courseRegistrationService.cancel(req.user.id, id);
+    @Get('registrations-me')
+    getMyRegistrations(@User() user: IUser, @Query() query: any) {
+        return this.courseRegistrationService.getMyRegistrations(
+            user.id,
+            query,
+        );
+    }
+    @Get('my-classes')
+    async getMyClasses(@User() req: IUser) {
+        return this.courseRegistrationService.getMyClasses(req.id);
+    }
+
+    @Get('my-classes/:courseId')
+    async getMyClassDetail(
+        @User() req: IUser,
+        @Param('courseId', ParseIntPipe) courseId: number,
+    ) {
+        return this.courseRegistrationService.getMyClassDetail(
+            req.id,
+            courseId,
+        );
+    }
+
+    @Patch(':id/cancel')
+    cancel(@User() user: IUser, @Param('id', ParseIntPipe) id: number) {
+        return this.courseRegistrationService.cancel(user.id, id);
     }
 }

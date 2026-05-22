@@ -8,6 +8,7 @@ import { Schedule } from '@/schedules/entities/schedule.entity';
 import { CourseOffering } from '@/course-offering/entities/course-offering.entity';
 import { PaymentService } from '@/payment/payment.service';
 import { PaymentModule } from '@/payment/payment.module';
+import { Term } from '@/terms/entities/term.entity';
 
 @Module({
     controllers: [CourseRegistrationController],
@@ -18,6 +19,7 @@ import { PaymentModule } from '@/payment/payment.module';
             CourseOffering,
             Schedule,
             Student,
+            Term,
         ]),
         PaymentModule,
     ],

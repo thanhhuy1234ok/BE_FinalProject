@@ -29,12 +29,21 @@ import { LessonModule } from './lesson/lesson.module';
 import { CourseRegistrationModule } from './course-registration/course-registration.module';
 import { PaymentModule } from './payment/payment.module';
 import { PaymentItemModule } from './payment-item/payment-item.module';
+import { ScheduleModule } from '@nestjs/schedule';
+import { AttendanceModule } from './attendance/attendance.module';
+import { RealtimeModule } from './realtime/realtime.module';
+import { NotificationModule } from './notification/notification.module';
+import { MailModule } from './mail/mail.module';
+import { DocumentModule } from './document/document.module';
+import { ChatAppModule } from './chat-app/chat-app.module';
 
 @Module({
     imports: [
         TypeOrmModule.forRootAsync({
             useClass: TypeOrmConfigService,
         }),
+
+        ScheduleModule.forRoot(),
 
         ConfigModule.forRoot({
             isGlobal: true,
@@ -64,6 +73,12 @@ import { PaymentItemModule } from './payment-item/payment-item.module';
         CourseRegistrationModule,
         PaymentModule,
         PaymentItemModule,
+        AttendanceModule,
+        RealtimeModule,
+        NotificationModule,
+        MailModule,
+        DocumentModule,
+        ChatAppModule,
     ],
     controllers: [AppController],
     providers: [AppService],

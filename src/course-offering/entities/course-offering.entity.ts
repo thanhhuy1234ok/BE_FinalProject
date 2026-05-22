@@ -1,5 +1,6 @@
 import { AdminClass } from '@/admin-class/entities/admin-class.entity';
 import { CourseRegistration } from '@/course-registration/entities/course-registration.entity';
+import { Document } from '@/document/entities/document.entity';
 import { CourseOfferingStatus } from '@/helpers/enum/enum.global';
 import { Lesson } from '@/lesson/entities/lesson.entity';
 import { Schedule } from '@/schedules/entities/schedule.entity';
@@ -77,6 +78,9 @@ export class CourseOffering {
 
     @OneToMany(() => Lesson, (lesson) => lesson.courseOffering)
     lessons: Lesson[];
+
+    @OneToMany(() => Document, (document) => document.courseOffering)
+    documents: Document[];
 
     @OneToMany(
         () => CourseRegistration,
