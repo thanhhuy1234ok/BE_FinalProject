@@ -1,4 +1,12 @@
-import { Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
+import {
+    Controller,
+    Delete,
+    Get,
+    Param,
+    ParseIntPipe,
+    Post,
+    Query,
+} from '@nestjs/common';
 import { LessonService } from './lesson.service';
 import { ResponseMessage, User } from '@/helpers/decorator/customize';
 import { QueryStudentLessonsDto } from './dto/create-lesson.dto';
@@ -20,6 +28,20 @@ export class LessonController {
         @Query() query: QueryStudentLessonsDto,
     ) {
         return this.lessonService.getLessonsByStudentAndDate(user.id, query);
+    }
+
+    @Get('teacher/by-date')
+    getTeacherLessonsByDate(@User() req: IUser, @Query('date') date: string) {
+        return this.lessonService.getTeacherLessonsByDate(req.id, date);
+    }
+
+    @Get('teacher/teaching-sessions')
+    getTeachingSessions(
+        @User() req: IUser,
+        @Query('fromDate') fromDate?: string,
+        @Query('toDate') toDate?: string,
+    ) {
+        return this.lessonService.getTeachingSessions(req.id, fromDate, toDate);
     }
 
     @Post('generate/course-offering/:courseOfferingId')
@@ -49,5 +71,21 @@ export class LessonController {
     @Get('schedule/:scheduleId')
     findBySchedule(@Param('scheduleId') scheduleId: string) {
         return this.lessonService.findBySchedule(+scheduleId);
+    }
+
+    @Get('teacher/:lessonId/students')
+    getLessonStudents(
+        @User() req: IUser,
+        @Param('lessonId', ParseIntPipe) lessonId: number,
+    ) {
+        return this.lessonService.getLessonStudents(req.id, lessonId);
+    }
+
+    @Get(':lessonId')
+    getTeacherLessonDetail(
+        @User() req: IUser,
+        @Param('lessonId', ParseIntPipe) lessonId: number,
+    ) {
+        return this.lessonService.getTeacherLessonDetail(req.id, lessonId);
     }
 }

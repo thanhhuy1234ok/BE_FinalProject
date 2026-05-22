@@ -1,19 +1,40 @@
-import { HttpExceptionFilter } from '@/helpers/core/http-exception.filter';
-import { Public, ResponseMessage } from '@/helpers/decorator/customize';
-import { Controller, Post, UploadedFile, UseFilters, UseInterceptors } from '@nestjs/common';
+import {
+    BadRequestException,
+    Controller,
+    Post,
+    UploadedFile,
+    UseInterceptors,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Public, ResponseMessage } from '@/helpers/decorator/customize';
+import { CloudinaryService } from './file.service';
 
 @Controller('file')
 export class FileController {
-  @Public()
-  @Post('upload')
-  @ResponseMessage('Upload Single File')
-  @UseInterceptors(FileInterceptor('fileUpload'))
-  @UseFilters(new HttpExceptionFilter())
-  uploadFile(@UploadedFile() file: Express.Multer.File) {
-    console.log(file.filename)
-    return {
-      fileName: file.filename,
-    };
-  }
+    constructor(private readonly cloudinaryService: CloudinaryService) {}
+
+    @Public()
+    @Post('single')
+    @ResponseMessage('Upload Single File')
+    @UseInterceptors(FileInterceptor('file'))
+    async uploadSingle(@UploadedFile() file: Express.Multer.File) {
+        if (!file) {
+            throw new BadRequestException('Vui lòng chọn file');
+        }
+
+        const uploaded = await this.cloudinaryService.uploadFile(
+            file,
+            'course-documents',
+        );
+
+        return {
+            fileName: file.originalname,
+            mimetype: file.mimetype,
+            size: file.size,
+            url: uploaded.secure_url,
+            secureUrl: uploaded.secure_url,
+            publicId: uploaded.public_id,
+            resourceType: uploaded.resource_type,
+        };
+    }
 }

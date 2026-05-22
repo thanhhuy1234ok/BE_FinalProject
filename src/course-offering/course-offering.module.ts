@@ -7,6 +7,7 @@ import { Term } from '@/terms/entities/term.entity';
 import { TeacherSubject } from '@/teacher-subject/entities/teacher-subject.entity';
 import { AdminClass } from '@/admin-class/entities/admin-class.entity';
 import { CourseRegistration } from '@/course-registration/entities/course-registration.entity';
+import { ConversationMember } from '@/chat-app/entities/conversation-member.entity';
 
 @Module({
     controllers: [CourseOfferingController],
@@ -18,6 +19,7 @@ import { CourseRegistration } from '@/course-registration/entities/course-regist
             Term,
             AdminClass,
             CourseRegistration,
+            ConversationMember,
         ]),
     ],
 })

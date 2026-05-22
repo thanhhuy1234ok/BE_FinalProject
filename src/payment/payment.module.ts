@@ -8,6 +8,10 @@ import { CourseRegistration } from '@/course-registration/entities/course-regist
 import { Student } from '@/users/entities/student.entity';
 import { CourseOffering } from '@/course-offering/entities/course-offering.entity';
 import { Term } from '@/terms/entities/term.entity';
+import { NotificationModule } from '@/notification/notification.module';
+import { User } from '@/users/entities/user.entity';
+import { MailModule } from '@/mail/mail.module';
+import { ChatAppModule } from '@/chat-app/chat-app.module';
 
 @Module({
     controllers: [PaymentController],
@@ -20,7 +24,11 @@ import { Term } from '@/terms/entities/term.entity';
             Student,
             CourseOffering,
             Term,
+            User,
         ]),
+        NotificationModule,
+        MailModule,
+        ChatAppModule,
     ],
     exports: [PaymentService],
 })

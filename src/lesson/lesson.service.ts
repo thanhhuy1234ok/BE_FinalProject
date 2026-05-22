@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+    BadRequestException,
+    Injectable,
+    NotFoundException,
+} from '@nestjs/common';
 import {
     CreateLessonDto,
     QueryStudentLessonsDto,
@@ -6,11 +10,19 @@ import {
 import { UpdateLessonDto } from './dto/update-lesson.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Lesson } from './entities/lesson.entity';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Schedule } from '@/schedules/entities/schedule.entity';
-import { LessonStatus, RegistrationStatus } from '@/helpers/enum/enum.global';
+import {
+    LESSON_TIME_MAP,
+    LessonStatus,
+    RegistrationStatus,
+} from '@/helpers/enum/enum.global';
 import { Student } from '@/users/entities/student.entity';
 import { CourseRegistration } from '@/course-registration/entities/course-registration.entity';
+import dayjs from 'dayjs';
+import { Teacher } from '@/users/entities/teacher.entity';
+import { Cron } from '@nestjs/schedule';
+import { Attendance } from '@/attendance/entities/attendance.entity';
 
 @Injectable()
 export class LessonService {
@@ -26,6 +38,12 @@ export class LessonService {
 
         @InjectRepository(CourseRegistration)
         private readonly registrationRepo: Repository<CourseRegistration>,
+
+        @InjectRepository(Teacher)
+        private readonly teacherRepo: Repository<Teacher>,
+
+        @InjectRepository(Attendance)
+        private readonly attendanceRepo: Repository<Attendance>,
     ) {}
 
     async generateBySchedule(scheduleId: number) {
@@ -322,5 +340,478 @@ export class LessonService {
                     : null,
             })),
         };
+    }
+
+    async getTeacherLessonsByDate(teacherUserId: string, date: string) {
+        if (!date || !dayjs(date, 'YYYY-MM-DD', true).isValid()) {
+            throw new BadRequestException('Ngày không hợp lệ');
+        }
+
+        const teacher = await this.teacherRepo.findOne({
+            where: {
+                user: {
+                    id: teacherUserId,
+                },
+            },
+            relations: {
+                user: true,
+            },
+        });
+
+        if (!teacher) {
+            throw new NotFoundException('Không tìm thấy giảng viên');
+        }
+
+        const lessons = await this.lessonRepository.find({
+            where: {
+                date,
+                isActive: true,
+                courseOffering: {
+                    teacherSubject: {
+                        teacher: {
+                            id: teacher.id,
+                        },
+                    },
+                },
+            },
+            relations: {
+                room: true,
+                schedule: true,
+                courseOffering: {
+                    term: true,
+                    teacherSubject: {
+                        teacher: {
+                            user: true,
+                        },
+                        subject: true,
+                    },
+                },
+            },
+            order: {
+                lessonStart: 'ASC',
+            },
+        });
+
+        return {
+            result: lessons.map((lesson) => ({
+                id: lesson.id,
+                date: lesson.date,
+                dayOfWeek: lesson.dayOfWeek,
+                lessonStart: lesson.lessonStart,
+                lessonEnd: lesson.lessonEnd,
+                status: lesson.status,
+                isActive: lesson.isActive,
+
+                room: lesson.room
+                    ? {
+                          id: lesson.room.id,
+                          name: lesson.room.name,
+                      }
+                    : null,
+
+                courseOffering: lesson.courseOffering
+                    ? {
+                          id: lesson.courseOffering.id,
+                          code: lesson.courseOffering.code,
+
+                          subject: lesson.courseOffering.teacherSubject?.subject
+                              ? {
+                                    id: lesson.courseOffering.teacherSubject
+                                        .subject.id,
+                                    name: lesson.courseOffering.teacherSubject
+                                        .subject.name,
+                                    code: lesson.courseOffering.teacherSubject
+                                        .subject.code,
+                                    credit: lesson.courseOffering.teacherSubject
+                                        .subject.credit,
+                                }
+                              : null,
+
+                          teacher: lesson.courseOffering.teacherSubject?.teacher
+                              ? {
+                                    id: lesson.courseOffering.teacherSubject
+                                        .teacher.id,
+                                    name:
+                                        lesson.courseOffering.teacherSubject
+                                            .teacher.user?.name ?? null,
+                                }
+                              : null,
+
+                          term: lesson.courseOffering.term
+                              ? {
+                                    id: lesson.courseOffering.term.id,
+                                    semester:
+                                        lesson.courseOffering.term.semester,
+                                    year: lesson.courseOffering.term.year,
+                                }
+                              : null,
+                      }
+                    : null,
+            })),
+        };
+    }
+
+    @Cron('*/30 * * * *')
+    async updateLessonStatusCron() {
+        await this.updateLessonStatuses();
+    }
+
+    async updateLessonStatuses() {
+        const today = dayjs().format('YYYY-MM-DD');
+
+        const lessons = await this.lessonRepository.find({
+            where: {
+                date: today,
+                isActive: true,
+                status: In([LessonStatus.UPCOMING, LessonStatus.ONGOING]),
+            },
+        });
+
+        for (const lesson of lessons) {
+            const nextStatus = this.calculateLessonStatus(lesson);
+
+            if (lesson.status !== nextStatus) {
+                lesson.status = nextStatus;
+                await this.lessonRepository.save(lesson);
+            }
+        }
+        console.log('Update Status');
+
+        return {
+            message: 'Cập nhật trạng thái lesson thành công',
+            total: lessons.length,
+        };
+    }
+
+    private calculateLessonStatus(lesson: Lesson): LessonStatus {
+        const startTime = LESSON_TIME_MAP[lesson.lessonStart]?.start;
+        const endTime = LESSON_TIME_MAP[lesson.lessonEnd]?.end;
+
+        if (!startTime || !endTime) {
+            return LessonStatus.UPCOMING;
+        }
+
+        const startAt = dayjs(
+            `${lesson.date} ${startTime}`,
+            'YYYY-MM-DD HH:mm',
+        );
+
+        const endAt = dayjs(`${lesson.date} ${endTime}`, 'YYYY-MM-DD HH:mm');
+
+        const openAt = startAt.subtract(30, 'minute');
+        const now = dayjs();
+
+        if (now.isAfter(endAt)) {
+            return LessonStatus.COMPLETED;
+        }
+
+        if (now.isSame(openAt) || now.isAfter(openAt)) {
+            return LessonStatus.ONGOING;
+        }
+
+        return LessonStatus.UPCOMING;
+    }
+
+    async syncLessonStatus(lesson: Lesson) {
+        const nextStatus = this.calculateLessonStatus(lesson);
+
+        if (lesson.status !== nextStatus) {
+            lesson.status = nextStatus;
+            await this.lessonRepository.save(lesson);
+        }
+
+        return lesson;
+    }
+
+    async getTeacherLessonDetail(teacherUserId: string, lessonId: number) {
+        const teacher = await this.teacherRepo.findOne({
+            where: {
+                user: {
+                    id: teacherUserId,
+                },
+            },
+            relations: {
+                user: true,
+            },
+        });
+
+        if (!teacher) {
+            throw new NotFoundException('Không tìm thấy giảng viên');
+        }
+
+        const lesson = await this.lessonRepository.findOne({
+            where: {
+                id: lessonId,
+                isActive: true,
+                courseOffering: {
+                    teacherSubject: {
+                        teacher: {
+                            id: teacher.id,
+                        },
+                    },
+                },
+            },
+            relations: {
+                room: true,
+                schedule: true,
+                courseOffering: {
+                    term: true,
+                    teacherSubject: {
+                        teacher: {
+                            user: true,
+                        },
+                        subject: true,
+                    },
+                },
+            },
+        });
+
+        if (!lesson) {
+            throw new NotFoundException('Không tìm thấy buổi học');
+        }
+
+        await this.syncLessonStatus(lesson);
+
+        return {
+            result: {
+                id: lesson.id,
+                date: lesson.date,
+                dayOfWeek: lesson.dayOfWeek,
+                lessonStart: lesson.lessonStart,
+                lessonEnd: lesson.lessonEnd,
+                status: lesson.status,
+                isActive: lesson.isActive,
+
+                room: lesson.room
+                    ? {
+                          id: lesson.room.id,
+                          name: lesson.room.name,
+                      }
+                    : null,
+
+                schedule: lesson.schedule
+                    ? {
+                          id: lesson.schedule.id,
+                          dayOfWeek: lesson.schedule.dayOfWeek,
+                          lessonStart: lesson.schedule.lessonStart,
+                          lessonEnd: lesson.schedule.lessonEnd,
+                      }
+                    : null,
+
+                courseOffering: lesson.courseOffering
+                    ? {
+                          id: lesson.courseOffering.id,
+                          code: lesson.courseOffering.code,
+
+                          subject: lesson.courseOffering.teacherSubject?.subject
+                              ? {
+                                    id: lesson.courseOffering.teacherSubject
+                                        .subject.id,
+                                    name: lesson.courseOffering.teacherSubject
+                                        .subject.name,
+                                    code: lesson.courseOffering.teacherSubject
+                                        .subject.code,
+                                    credit: lesson.courseOffering.teacherSubject
+                                        .subject.credit,
+                                }
+                              : null,
+
+                          teacher: lesson.courseOffering.teacherSubject?.teacher
+                              ? {
+                                    id: lesson.courseOffering.teacherSubject
+                                        .teacher.id,
+                                    name:
+                                        lesson.courseOffering.teacherSubject
+                                            .teacher.user?.name ?? null,
+                                }
+                              : null,
+
+                          term: lesson.courseOffering.term
+                              ? {
+                                    id: lesson.courseOffering.term.id,
+                                    semester:
+                                        lesson.courseOffering.term.semester,
+                                    year: lesson.courseOffering.term.year,
+                                }
+                              : null,
+                      }
+                    : null,
+            },
+        };
+    }
+
+    async getLessonStudents(teacherUserId: string, lessonId: number) {
+        const teacher = await this.teacherRepo.findOne({
+            where: {
+                user: {
+                    id: teacherUserId,
+                },
+            },
+        });
+
+        if (!teacher) {
+            throw new NotFoundException('Không tìm thấy giảng viên');
+        }
+
+        const lesson = await this.lessonRepository.findOne({
+            where: {
+                id: lessonId,
+                isActive: true,
+                courseOffering: {
+                    teacherSubject: {
+                        teacher: {
+                            id: teacher.id,
+                        },
+                    },
+                },
+            },
+            relations: {
+                courseOffering: {
+                    teacherSubject: {
+                        teacher: true,
+                    },
+                },
+            },
+        });
+
+        if (!lesson) {
+            throw new NotFoundException('Không tìm thấy buổi học');
+        }
+
+        const registrations = await this.registrationRepo.find({
+            where: {
+                courseOfferingId: lesson.courseOfferingId,
+                status: RegistrationStatus.REGISTERED,
+            },
+            relations: {
+                student: {
+                    user: true,
+                },
+            },
+            order: {
+                student: {
+                    id: 'ASC',
+                },
+            },
+        });
+
+        const attendances = await this.attendanceRepo.find({
+            where: {
+                lessonId: lesson.id,
+            },
+        });
+
+        const attendanceMap = new Map(
+            attendances.map((item) => [item.registrationId, item]),
+        );
+
+        return {
+            result: registrations.map((item) => {
+                const attendance = attendanceMap.get(item.id);
+
+                return {
+                    registrationId: item.id,
+                    student: {
+                        id: item.student.id,
+                        userId: item.student.user_id,
+                        mssv: item.student.mssv,
+                        name: item.student.user?.name ?? null,
+                        email: item.student.user?.email ?? null,
+                    },
+                    attendance: attendance
+                        ? {
+                              id: attendance.id,
+                              status: attendance.status,
+                              method: attendance.method,
+                              checkedAt: attendance.checkedAt,
+                          }
+                        : {
+                              status: 'NOT_ATTENDED',
+                              method: null,
+                              checkedAt: null,
+                              note: null,
+                          },
+                };
+            }),
+        };
+    }
+
+    async getTeachingSessions(
+        userId: string,
+        fromDate?: string,
+        toDate?: string,
+    ) {
+        const teacher = await this.teacherRepo.findOne({
+            where: {
+                user: {
+                    id: userId,
+                },
+            },
+            relations: {
+                user: true,
+            },
+        });
+
+        if (!teacher) {
+            throw new NotFoundException('Không tìm thấy giáo viên');
+        }
+
+        const qb = this.lessonRepository
+            .createQueryBuilder('lesson')
+            .leftJoinAndSelect('lesson.schedule', 'schedule')
+            .leftJoinAndSelect('schedule.room', 'room')
+            .leftJoinAndSelect('lesson.courseOffering', 'courseOffering')
+            .leftJoinAndSelect('courseOffering.adminClass', 'adminClass')
+            .leftJoinAndSelect(
+                'courseOffering.teacherSubject',
+                'teacherSubject',
+            )
+            .leftJoinAndSelect('teacherSubject.subject', 'subject')
+            .leftJoinAndSelect('teacherSubject.teacher', 'teacher')
+            .where('lesson.deletedAt IS NULL')
+            .andWhere('teacher.id = :teacherId', {
+                teacherId: teacher.id,
+            });
+
+        if (fromDate) {
+            qb.andWhere('lesson.date >= :fromDate', {
+                fromDate,
+            });
+        }
+
+        if (toDate) {
+            qb.andWhere('lesson.date <= :toDate', {
+                toDate,
+            });
+        }
+
+        qb.orderBy('lesson.date', 'ASC');
+
+        const lessons = await qb.getMany();
+
+        return lessons.map((lesson) => {
+            const startLesson = LESSON_TIME_MAP[lesson.schedule?.lessonStart];
+
+            const endLesson = LESSON_TIME_MAP[lesson.schedule?.lessonEnd];
+
+            return {
+                id: lesson.id,
+
+                subject:
+                    lesson.courseOffering?.teacherSubject?.subject?.name ||
+                    'Không rõ môn học',
+
+                className:
+                    lesson.courseOffering?.adminClass?.code ||
+                    lesson.courseOffering?.adminClass?.name ||
+                    'Môn chung',
+
+                date: dayjs(lesson.date).format('YYYY-MM-DD'),
+
+                startTime: startLesson?.start || '--:--',
+
+                endTime: endLesson?.end || '--:--',
+            };
+        });
     }
 }

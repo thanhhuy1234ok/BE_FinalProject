@@ -1,19 +1,26 @@
 import { CourseOffering } from '@/course-offering/entities/course-offering.entity';
 import { CourseRegistration } from '@/course-registration/entities/course-registration.entity';
-import { PaymentItemStatus } from '@/helpers/enum/enum.global';
 import { Payment } from '@/payment/entities/payment.entity';
+
 import {
     Column,
     Entity,
+    Index,
     JoinColumn,
     ManyToOne,
+    OneToOne,
     PrimaryGeneratedColumn,
 } from 'typeorm';
 
 @Entity('payment_items')
+@Index(['paymentId'])
+@Index(['registrationId'], { unique: true })
 export class PaymentItem {
     @PrimaryGeneratedColumn()
     id: number;
+
+    @Column({ name: 'payment_id' })
+    paymentId: number;
 
     @ManyToOne(() => Payment, (payment) => payment.items, {
         nullable: false,
@@ -22,30 +29,45 @@ export class PaymentItem {
     @JoinColumn({ name: 'payment_id' })
     payment: Payment;
 
-    @ManyToOne(() => CourseRegistration, {
-        nullable: false,
-        onDelete: 'RESTRICT',
-    })
+    @Column({ name: 'registration_id', unique: true })
+    registrationId: number;
+
+    @OneToOne(
+        () => CourseRegistration,
+        (registration) => registration.paymentItem,
+        {
+            nullable: false,
+            onDelete: 'RESTRICT',
+        },
+    )
     @JoinColumn({ name: 'registration_id' })
     registration: CourseRegistration;
 
-    @ManyToOne(() => CourseOffering, { nullable: false, onDelete: 'RESTRICT' })
+    @Column({ name: 'course_offering_id' })
+    courseOfferingId: number;
+
+    @ManyToOne(() => CourseOffering, {
+        nullable: false,
+        onDelete: 'RESTRICT',
+    })
     @JoinColumn({ name: 'course_offering_id' })
     courseOffering: CourseOffering;
 
-    @Column({ type: 'int', default: 0 })
+    @Column({ type: 'int' })
     credits: number;
 
-    @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
-    unitPrice: number;
-
-    @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
-    amount: number;
+    @Column({
+        type: 'decimal',
+        precision: 12,
+        scale: 2,
+        name: 'unit_price',
+    })
+    unitPrice: string;
 
     @Column({
-        type: 'enum',
-        enum: PaymentItemStatus,
-        default: PaymentItemStatus.ACTIVE,
+        type: 'decimal',
+        precision: 12,
+        scale: 2,
     })
-    status: PaymentItemStatus;
+    amount: string;
 }

@@ -11,6 +11,8 @@ import {
 import { SchedulesService } from './schedules.service';
 import { CreateScheduleDto } from './dto/create-schedule.dto';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
+import { User } from '@/helpers/decorator/customize';
+import type { IUser } from '@/helpers/types/user.interface';
 
 @Controller('schedules')
 export class SchedulesController {
@@ -28,6 +30,46 @@ export class SchedulesController {
         @Query() qs: string,
     ) {
         return this.schedulesService.findAll(+currentPage, +limit, qs);
+    }
+    @Get('time-table-teacher')
+    getTimeTableTeacher(@User() req: IUser) {
+        return this.schedulesService.getTimeTableTeacher(req.id);
+    }
+
+    @Get('time-table-student')
+    getTimeTableStudent(@User() req: IUser) {
+        return this.schedulesService.getTimeTableStudent(req.id);
+    }
+
+    @Get('my-timetable')
+    async getMyTimeTable(@User() user: IUser) {
+        const userId = user.id;
+        return this.schedulesService.getMyTimeTable(userId);
+    }
+
+    @Get('teacher/today')
+    getTodayTeacherSchedules(@User() req: IUser) {
+        return this.schedulesService.getTodayTeacherSchedules(req.id);
+    }
+
+    @Get('teacher/courses')
+    getTeachingCourses(@User() req: IUser) {
+        return this.schedulesService.getTeachingCourses(req.id);
+    }
+
+    @Get('timetable')
+    getMyTimetable(
+        @User() req: IUser,
+        @Query('date') date?: string,
+        @Query('from') from?: string,
+        @Query('to') to?: string,
+    ) {
+        return this.schedulesService.getMyTimetableTeacher(
+            req.id,
+            date,
+            from,
+            to,
+        );
     }
 
     @Get(':id')

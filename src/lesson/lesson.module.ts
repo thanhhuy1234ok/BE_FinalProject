@@ -7,6 +7,8 @@ import { Lesson } from './entities/lesson.entity';
 import { Schedule } from '@/schedules/entities/schedule.entity';
 import { Student } from '@/users/entities/student.entity';
 import { CourseRegistration } from '@/course-registration/entities/course-registration.entity';
+import { Teacher } from '@/users/entities/teacher.entity';
+import { Attendance } from '@/attendance/entities/attendance.entity';
 
 @Module({
     controllers: [LessonController],
@@ -17,6 +19,8 @@ import { CourseRegistration } from '@/course-registration/entities/course-regist
             Schedule,
             Student,
             CourseRegistration,
+            Teacher,
+            Attendance,
         ]),
     ],
 })

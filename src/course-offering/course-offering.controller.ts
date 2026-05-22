@@ -16,6 +16,8 @@ import {
     UpdateCourseOfferingStatusDto,
 } from './dto/create-course-offering.dto';
 import { UpdateCourseOfferingDto } from './dto/update-course-offering.dto';
+import type { IUser } from '@/helpers/types/user.interface';
+import { User } from '@/helpers/decorator/customize';
 
 @Controller('course-offering')
 export class CourseOfferingController {
@@ -52,16 +54,19 @@ export class CourseOfferingController {
         return this.courseOfferingService.updateStatus(id, dto.status);
     }
 
-    @Patch(':id')
-    update(
-        @Param('id') id: string,
-        @Body() updateCourseOfferingDto: UpdateCourseOfferingDto,
-    ) {
-        return this.courseOfferingService.update(+id, updateCourseOfferingDto);
+    @Get('teacher/my-courses')
+    getMyTeachingCourses(@User() req: IUser, @Query('termId') termId?: string) {
+        return this.courseOfferingService.getMyTeachingCourses(
+            req.id,
+            termId ? +termId : undefined,
+        );
     }
 
-    @Delete(':id')
-    remove(@Param('id') id: string) {
-        return this.courseOfferingService.remove(+id);
+    @Get('teacher/my-courses/:id')
+    getMyTeachingCourseDetail(@User() req: IUser, @Param('id') id: string) {
+        return this.courseOfferingService.getMyTeachingCourseDetail(
+            req.id,
+            +id,
+        );
     }
 }
