@@ -10,6 +10,10 @@ import { Major } from '@/majors/entities/major.entity';
 import { YearOfAdmission } from '@/year-of-admission/entities/year-of-admission.entity';
 import { AdminClass } from '@/admin-class/entities/admin-class.entity';
 import { Department } from '@/departments/entities/department.entity';
+import { CourseOffering } from '@/course-offering/entities/course-offering.entity';
+import { Grade } from '@/grades/entities/grade.entity';
+import { Attendance } from '@/attendance/entities/attendance.entity';
+import { CourseRegistration } from '@/course-registration/entities/course-registration.entity';
 
 @Module({
     imports: [
@@ -22,6 +26,10 @@ import { Department } from '@/departments/entities/department.entity';
             YearOfAdmission,
             AdminClass,
             Department,
+            CourseOffering,
+            Attendance,
+            Grade,
+            CourseRegistration,
         ]),
     ],
     controllers: [UsersController],

@@ -640,6 +640,12 @@ export class CourseOfferingService {
                     student: {
                         user: true,
                     },
+                    grade: true,
+                },
+            },
+            order: {
+                courseRegistrations: {
+                    id: 'ASC',
                 },
             },
         });
