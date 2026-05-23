@@ -1,0 +1,227 @@
+<html lang='vi'>
+    <head>
+        <meta charset='UTF-8' />
+        <title>Thanh toán học phí thành công</title>
+    </head>
+    <body
+        style='margin:0;padding:0;background:#f4f6f8;font-family:Arial,Helvetica,sans-serif;color:#1f2937;'
+    >
+        <table
+            width='100%'
+            cellpadding='0'
+            cellspacing='0'
+            style='background:#f4f6f8;padding:24px 0;'
+        >
+            <tr>
+                <td align='center'>
+                    <table
+                        width='680'
+                        cellpadding='0'
+                        cellspacing='0'
+                        style='background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,0.08);'
+                    >
+
+                        <!-- Header -->
+                        <tr>
+                            <td
+                                style='background:linear-gradient(135deg,#16a34a,#22c55e);padding:28px;text-align:center;color:#ffffff;'
+                            >
+                                <h1 style='margin:0;font-size:26px;'>Thanh toán
+                                    thành công</h1>
+                                <p style='margin:8px 0 0;font-size:15px;'>
+                                    Hệ thống đã ghi nhận thanh toán học phí của
+                                    bạn
+                                </p>
+                            </td>
+                        </tr>
+
+                        <!-- Content -->
+                        <tr>
+                            <td style='padding:28px;'>
+                                <p style='font-size:16px;margin:0 0 12px;'>
+                                    Xin chào
+                                    <strong>{{studentName}}</strong>,
+                                </p>
+
+                                <p
+                                    style='font-size:15px;line-height:1.6;margin:0 0 20px;color:#4b5563;'
+                                >
+                                    Bạn đã thanh toán học phí thành công. Dưới
+                                    đây là thông tin chi tiết giao dịch:
+                                </p>
+
+                                <!-- Payment Info -->
+                                <table
+                                    width='100%'
+                                    cellpadding='0'
+                                    cellspacing='0'
+                                    style='border-collapse:collapse;margin-bottom:24px;'
+                                >
+                                    <tr>
+                                        <td
+                                            style='padding:12px;border:1px solid #e5e7eb;background:#f9fafb;'
+                                        >Mã hóa đơn</td>
+                                        <td
+                                            style='padding:12px;border:1px solid #e5e7eb;'
+                                        ><strong>{{paymentCode}}</strong></td>
+                                    </tr>
+                                    <tr>
+                                        <td
+                                            style='padding:12px;border:1px solid #e5e7eb;background:#f9fafb;'
+                                        >Mã giao dịch</td>
+                                        <td
+                                            style='padding:12px;border:1px solid #e5e7eb;'
+                                        >{{transactionRef}}</td>
+                                    </tr>
+                                    <tr>
+                                        <td
+                                            style='padding:12px;border:1px solid #e5e7eb;background:#f9fafb;'
+                                        >Phương thức</td>
+                                        <td
+                                            style='padding:12px;border:1px solid #e5e7eb;'
+                                        >{{paymentMethod}}</td>
+                                    </tr>
+                                    <tr>
+                                        <td
+                                            style='padding:12px;border:1px solid #e5e7eb;background:#f9fafb;'
+                                        >Học kỳ</td>
+                                        <td
+                                            style='padding:12px;border:1px solid #e5e7eb;'
+                                        >{{termName}}</td>
+                                    </tr>
+                                    <tr>
+                                        <td
+                                            style='padding:12px;border:1px solid #e5e7eb;background:#f9fafb;'
+                                        >Thời gian thanh toán</td>
+                                        <td
+                                            style='padding:12px;border:1px solid #e5e7eb;'
+                                        >{{paidAt}}</td>
+                                    </tr>
+                                </table>
+
+                                <!-- Items -->
+                                <h3 style='margin:0 0 12px;font-size:18px;'>Chi
+                                    tiết môn học</h3>
+
+                                <table
+                                    width='100%'
+                                    cellpadding='0'
+                                    cellspacing='0'
+                                    style='border-collapse:collapse;'
+                                >
+                                    <thead>
+                                        <tr>
+                                            <th
+                                                align='left'
+                                                style='padding:12px;border:1px solid #e5e7eb;background:#f3f4f6;'
+                                            >Môn học</th>
+                                            <th
+                                                align='center'
+                                                style='padding:12px;border:1px solid #e5e7eb;background:#f3f4f6;'
+                                            >Số tín chỉ</th>
+                                            <th
+                                                align='right'
+                                                style='padding:12px;border:1px solid #e5e7eb;background:#f3f4f6;'
+                                            >Đơn giá</th>
+                                            <th
+                                                align='right'
+                                                style='padding:12px;border:1px solid #e5e7eb;background:#f3f4f6;'
+                                            >Thành tiền</th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody>
+                                        {{#each items}}
+                                            <tr>
+                                                <td
+                                                    style='padding:12px;border:1px solid #e5e7eb;'
+                                                >
+                                                    <strong
+                                                    >{{subjectName}}</strong><br
+                                                    />
+                                                    <span
+                                                        style='font-size:13px;color:#6b7280;'
+                                                    >Mã môn:
+                                                        {{subjectCode}}</span>
+                                                </td>
+                                                <td
+                                                    align='center'
+                                                    style='padding:12px;border:1px solid #e5e7eb;'
+                                                >
+                                                    {{credits}}
+                                                </td>
+                                                <td
+                                                    align='right'
+                                                    style='padding:12px;border:1px solid #e5e7eb;'
+                                                >
+                                                    {{unitPrice}}
+                                                </td>
+                                                <td
+                                                    align='right'
+                                                    style='padding:12px;border:1px solid #e5e7eb;'
+                                                >
+                                                    <strong>{{amount}}</strong>
+                                                </td>
+                                            </tr>
+                                        {{/each}}
+                                    </tbody>
+                                </table>
+
+                                <!-- Total -->
+                                <table
+                                    width='100%'
+                                    cellpadding='0'
+                                    cellspacing='0'
+                                    style='margin-top:20px;'
+                                >
+                                    <tr>
+                                        <td
+                                            align='right'
+                                            style='font-size:16px;color:#4b5563;'
+                                        >
+                                            Tổng số tín chỉ:
+                                            <strong>{{totalCredits}}</strong>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td
+                                            align='right'
+                                            style='padding-top:8px;font-size:22px;color:#16a34a;'
+                                        >
+                                            Tổng thanh toán:
+                                            <strong>{{totalAmount}}</strong>
+                                        </td>
+                                    </tr>
+                                </table>
+
+                                <!-- Note -->
+                                <div
+                                    style='margin-top:24px;padding:14px 16px;background:#ecfdf5;border-left:4px solid #22c55e;border-radius:8px;'
+                                >
+                                    <p
+                                        style='margin:0;font-size:14px;color:#166534;'
+                                    >
+                                        Vui lòng lưu lại email này để đối chiếu
+                                        khi cần thiết.
+                                    </p>
+                                </div>
+                            </td>
+                        </tr>
+
+                        <!-- Footer -->
+                        <tr>
+                            <td
+                                style='padding:20px;text-align:center;background:#f9fafb;color:#6b7280;font-size:13px;'
+                            >
+                                Email này được gửi tự động từ hệ thống quản lý
+                                trường học.<br />
+                                Vui lòng không trả lời email này.
+                            </td>
+                        </tr>
+
+                    </table>
+                </td>
+            </tr>
+        </table>
+    </body>
+</html>

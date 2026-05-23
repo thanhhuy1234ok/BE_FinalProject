@@ -8,30 +8,33 @@ import { Reflector } from '@nestjs/core';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { RESPONSE_MESSAGE } from '../decorator/customize';
+import { Response } from 'express';
 
-export interface Response<T> {
+export interface ApiResponse<T> {
   statusCode: number;
   message?: string;
-  data: any;
+  data: T;
 }
 
 @Injectable()
 export class TransformInterceptor<T>
-  implements NestInterceptor<T, Response<T>>
+  implements NestInterceptor<T, ApiResponse<T>>
 {
-  constructor(private reflector: Reflector) {}
+  constructor(private readonly reflector: Reflector) {}
 
   intercept(
     context: ExecutionContext,
-    next: CallHandler,
-  ): Observable<Response<T>> {
+    next: CallHandler<T>,
+  ): Observable<ApiResponse<T>> {
     return next.handle().pipe(
-      map((data) => ({
-        statusCode: context.switchToHttp().getResponse().statusCode,
+      map((data: T) => ({
+        statusCode: Number(
+          context.switchToHttp().getResponse<Response>().statusCode,
+        ),
         message:
-          this.reflector.get<string>(RESPONSE_MESSAGE, context.getHandler()) ||
+          this.reflector.get<string>(RESPONSE_MESSAGE, context.getHandler()) ??
           '',
-        data: data,
+        data,
       })),
     );
   }

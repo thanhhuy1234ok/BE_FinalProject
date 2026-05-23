@@ -1,3 +1,4 @@
-export const ADMINROLE = 'ADMIN';
-export const STUDENTROLE = 'STUDENT';
-export const TEACHERROLE = 'TEACHER';
+export const ADMIN_ROLE = 'ADMIN';
+export const STUDENT_ROLE = 'STUDENT';
+export const TEACHER_ROLE = 'TEACHER';
+export const EMAIL_ADMIN = 'admin@gmail.com';
