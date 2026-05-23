@@ -12,6 +12,7 @@ import { NotificationModule } from '@/notification/notification.module';
 import { User } from '@/users/entities/user.entity';
 import { MailModule } from '@/mail/mail.module';
 import { ChatAppModule } from '@/chat-app/chat-app.module';
+import { Grade } from '@/grades/entities/grade.entity';
 
 @Module({
     controllers: [PaymentController],
@@ -25,6 +26,7 @@ import { ChatAppModule } from '@/chat-app/chat-app.module';
             CourseOffering,
             Term,
             User,
+            Grade,
         ]),
         NotificationModule,
         MailModule,

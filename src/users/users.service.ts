@@ -7,7 +7,7 @@ import { CreateUserDto, ImportStudentExcelDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
-import { DataSource, EntityManager, Not, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, Not, Repository } from 'typeorm';
 import { Role } from '@/roles/entities/role.entity';
 import {
     ADMIN_ROLE,
@@ -24,7 +24,15 @@ import { Major } from '@/majors/entities/major.entity';
 import { Teacher } from './entities/teacher.entity';
 import { AdminClass } from '@/admin-class/entities/admin-class.entity';
 import { Department } from '@/departments/entities/department.entity';
-import { AdminClassStatus } from '@/helpers/enum/enum.global';
+import {
+    AdminClassStatus,
+    RegistrationStatus,
+} from '@/helpers/enum/enum.global';
+import { CourseOffering } from '@/course-offering/entities/course-offering.entity';
+import { Grade } from '@/grades/entities/grade.entity';
+import { Attendance } from '@/attendance/entities/attendance.entity';
+import { CourseRegistration } from '@/course-registration/entities/course-registration.entity';
+import dayjs from 'dayjs';
 
 @Injectable()
 export class UsersService {
@@ -46,6 +54,18 @@ export class UsersService {
 
         @InjectRepository(Teacher)
         private readonly teacherRepo: Repository<Teacher>,
+
+        @InjectRepository(CourseOffering)
+        private readonly courseOfferingRepo: Repository<CourseOffering>,
+
+        @InjectRepository(Attendance)
+        private readonly attendanceRepo: Repository<Attendance>,
+
+        @InjectRepository(CourseRegistration)
+        private readonly registrationRepo: Repository<CourseRegistration>,
+
+        @InjectRepository(Grade)
+        private readonly gradeRepo: Repository<Grade>,
 
         @InjectRepository(AdminClass)
         private readonly classRepo: Repository<AdminClass>,
@@ -1174,5 +1194,403 @@ export class UsersService {
                 total: totalItems,
             },
         };
+    }
+
+    async getMyProfile(userId: string) {
+        const teacher = await this.teacherRepo.findOne({
+            where: {
+                user: {
+                    id: userId,
+                },
+            },
+            relations: {
+                user: true,
+                teacherSubjects: {
+                    subject: true,
+                },
+            },
+        });
+
+        if (!teacher) {
+            throw new NotFoundException('Không tìm thấy giáo viên');
+        }
+
+        const courses = await this.courseOfferingRepo.find({
+            where: {
+                teacherSubject: {
+                    teacher: {
+                        id: teacher.id,
+                    },
+                },
+                term: {
+                    isActive: true,
+                },
+            },
+            relations: {
+                term: true,
+                adminClass: true,
+                schedules: {
+                    room: true,
+                },
+                teacherSubject: {
+                    subject: true,
+                },
+                courseRegistrations: true,
+                lessons: true,
+            },
+            order: {
+                id: 'DESC',
+            },
+        });
+
+        const totalStudents = courses.reduce(
+            (sum, item) => sum + (item.courseRegistrations?.length || 0),
+            0,
+        );
+
+        const totalLessons = courses.reduce(
+            (sum, item) => sum + (item.lessons?.length || 0),
+            0,
+        );
+
+        return {
+            teacher,
+            subjects: teacher.teacherSubjects?.map((ts) => ts.subject) || [],
+            courses,
+            stats: {
+                totalSubjects: teacher.teacherSubjects?.length || 0,
+                totalCourses: courses.length,
+                totalStudents,
+                totalLessons,
+            },
+        };
+    }
+
+    private async getStudentByUserId(userId: string) {
+        const student = await this.studentRepo.findOne({
+            where: {
+                user: {
+                    id: userId,
+                },
+            },
+            relations: {
+                user: true,
+            },
+        });
+
+        if (!student) {
+            throw new NotFoundException('Không tìm thấy sinh viên');
+        }
+
+        return student;
+    }
+
+    private async getActiveRegistrations(studentId: number) {
+        return this.registrationRepo.find({
+            where: {
+                student: {
+                    id: studentId,
+                },
+                status: RegistrationStatus.REGISTERED,
+                courseOffering: {
+                    term: {
+                        isActive: true,
+                    },
+                },
+            },
+            relations: {
+                courseOffering: {
+                    term: true,
+                    adminClass: true,
+                    teacherSubject: {
+                        teacher: {
+                            user: true,
+                        },
+                        subject: true,
+                    },
+                    schedules: {
+                        room: true,
+                    },
+                    lessons: true,
+                },
+            },
+        });
+    }
+
+    async getSummary(userId: string) {
+        const student = await this.getStudentByUserId(userId);
+        const registrations = await this.getActiveRegistrations(student.id);
+
+        const registrationIds = registrations.map((item) => item.id);
+
+        const totalCourses = registrations.length;
+
+        const totalCredits = registrations.reduce((sum, item) => {
+            const credit =
+                item.courseOffering?.teacherSubject?.subject?.credit || 0;
+
+            return sum + Number(credit);
+        }, 0);
+
+        const attendances = registrationIds.length
+            ? await this.attendanceRepo.find({
+                  where: {
+                      registrationId: In(registrationIds),
+                  },
+              })
+            : [];
+
+        const attendedCount = attendances.filter((item) =>
+            ['PRESENT', 'LATE'].includes(String(item.status)),
+        ).length;
+
+        const attendancePercent = attendances.length
+            ? Math.round((attendedCount / attendances.length) * 100)
+            : 0;
+
+        const grades = registrationIds.length
+            ? await this.gradeRepo.find({
+                  where: {
+                      registrationId: In(registrationIds),
+                      isPublished: true,
+                  },
+              })
+            : [];
+
+        const gpa = grades.length
+            ? Number(
+                  (
+                      grades.reduce((sum, grade) => {
+                          return (
+                              sum +
+                              this.convertTotalScoreToGpa(
+                                  Number(grade.totalScore || 0),
+                              )
+                          );
+                      }, 0) / grades.length
+                  ).toFixed(2),
+              )
+            : 0;
+
+        return {
+            totalCourses,
+            totalCredits,
+            attendancePercent,
+            gpa,
+        };
+    }
+
+    async getTodaySchedules(userId: string) {
+        const student = await this.getStudentByUserId(userId);
+        const registrations = await this.getActiveRegistrations(student.id);
+
+        const today = dayjs();
+
+        /**
+         * Nếu DB của bạn lưu:
+         * Thứ 2 = 2, Thứ 3 = 3, ..., Chủ nhật = 8
+         */
+        const currentDayOfWeek = today.day() === 0 ? 8 : today.day() + 1;
+
+        const result = registrations.flatMap((registration) => {
+            const courseOffering = registration.courseOffering;
+
+            return (courseOffering?.schedules || [])
+                .filter((schedule) => schedule.dayOfWeek === currentDayOfWeek)
+                .map((schedule) => {
+                    const start = this.getLessonTime(
+                        schedule.lessonStart,
+                    )?.start;
+
+                    const end = this.getLessonTime(schedule.lessonEnd)?.end;
+
+                    return {
+                        id: schedule.id,
+                        courseOfferingId: courseOffering.id,
+                        subject:
+                            courseOffering.teacherSubject?.subject?.name || '',
+                        code: courseOffering.code,
+                        className:
+                            courseOffering.adminClass?.name ||
+                            courseOffering.code,
+                        teacher:
+                            courseOffering.teacherSubject?.teacher?.user
+                                ?.name || 'Chưa có giảng viên',
+                        room: schedule.room?.name || 'Chưa có phòng',
+                        time: `${start || '--:--'} - ${end || '--:--'}`,
+                        status: this.getScheduleStatus(start, end),
+                    };
+                });
+        });
+
+        return result.sort((a, b) => a.time.localeCompare(b.time));
+    }
+
+    async getCourseProgress(userId: string) {
+        const student = await this.getStudentByUserId(userId);
+        const registrations = await this.getActiveRegistrations(student.id);
+
+        return registrations.map((registration) => {
+            const courseOffering = registration.courseOffering;
+            const lessons = courseOffering?.lessons || [];
+
+            const totalLessons = lessons.length;
+
+            const completedLessons = lessons.filter(
+                (lesson) => String(lesson.status) === 'COMPLETED',
+            ).length;
+
+            const progress = totalLessons
+                ? Math.round((completedLessons / totalLessons) * 100)
+                : 0;
+
+            return {
+                id: courseOffering.id,
+                registrationId: registration.id,
+                subject: courseOffering.teacherSubject?.subject?.name || '',
+                code: courseOffering.code,
+                teacher:
+                    courseOffering.teacherSubject?.teacher?.user?.name ||
+                    'Chưa có giảng viên',
+                totalLessons,
+                completedLessons,
+                progress,
+            };
+        });
+    }
+
+    async getLatestGrades(userId: string) {
+        const student = await this.getStudentByUserId(userId);
+        const registrations = await this.getActiveRegistrations(student.id);
+
+        const registrationIds = registrations.map((item) => item.id);
+
+        const grades = registrationIds.length
+            ? await this.gradeRepo.find({
+                  where: {
+                      registrationId: In(registrationIds),
+                      isPublished: true,
+                  },
+                  order: {
+                      updatedAt: 'DESC',
+                  },
+                  take: 8,
+              })
+            : [];
+
+        return grades.map((grade) => {
+            const registration = registrations.find(
+                (item) => item.id === grade.registrationId,
+            );
+
+            const courseOffering = registration?.courseOffering;
+            const subject = courseOffering?.teacherSubject?.subject;
+
+            return {
+                id: grade.id,
+                registrationId: grade.registrationId,
+                subject: subject?.name || '',
+                code: subject?.code || courseOffering?.code || '',
+                attendanceScore: Number(grade.attendanceScore || 0),
+                midtermScore: Number(grade.midtermScore || 0),
+                finalScore: Number(grade.finalScore || 0),
+                totalScore: Number(grade.totalScore || 0),
+                letterGrade: grade.letterGrade,
+                isPassed: grade.isPassed,
+            };
+        });
+    }
+
+    async getAttendanceOverview(userId: string) {
+        const student = await this.getStudentByUserId(userId);
+        const registrations = await this.getActiveRegistrations(student.id);
+
+        const registrationIds = registrations.map((item) => item.id);
+
+        const attendances = registrationIds.length
+            ? await this.attendanceRepo.find({
+                  where: {
+                      registrationId: In(registrationIds),
+                  },
+              })
+            : [];
+
+        const total = attendances.length;
+
+        const present = attendances.filter(
+            (item) => String(item.status) === 'PRESENT',
+        ).length;
+
+        const late = attendances.filter(
+            (item) => String(item.status) === 'LATE',
+        ).length;
+
+        const absent = attendances.filter(
+            (item) => String(item.status) === 'ABSENT',
+        ).length;
+
+        const attendancePercent = total
+            ? Math.round(((present + late) / total) * 100)
+            : 0;
+
+        return {
+            total,
+            present,
+            late,
+            absent,
+            attendancePercent,
+        };
+    }
+
+    private getScheduleStatus(startTime?: string, endTime?: string) {
+        if (!startTime || !endTime) return 'Sắp tới';
+
+        const now = dayjs();
+
+        const start = dayjs(
+            `${now.format('YYYY-MM-DD')} ${startTime}`,
+            'YYYY-MM-DD HH:mm',
+        );
+
+        const end = dayjs(
+            `${now.format('YYYY-MM-DD')} ${endTime}`,
+            'YYYY-MM-DD HH:mm',
+        );
+
+        if (now.isBefore(start)) return 'Sắp tới';
+        if (now.isAfter(end)) return 'Đã kết thúc';
+
+        return 'Đang diễn ra';
+    }
+
+    private getLessonTime(lesson: number) {
+        const LESSON_TIME_MAP: Record<number, { start: string; end: string }> =
+            {
+                1: { start: '07:00', end: '07:50' },
+                2: { start: '07:50', end: '08:40' },
+                3: { start: '08:50', end: '09:40' },
+                4: { start: '09:40', end: '10:30' },
+                5: { start: '10:40', end: '11:30' },
+                6: { start: '13:00', end: '13:50' },
+                7: { start: '13:50', end: '14:40' },
+                8: { start: '14:50', end: '15:40' },
+                9: { start: '15:40', end: '16:30' },
+                10: { start: '19:55', end: '20:30' },
+                11: { start: '20:30', end: '21:20' },
+            };
+
+        return LESSON_TIME_MAP[lesson];
+    }
+
+    private convertTotalScoreToGpa(score: number) {
+        if (score >= 8.5) return 4.0;
+        if (score >= 8.0) return 3.5;
+        if (score >= 7.0) return 3.0;
+        if (score >= 6.5) return 2.5;
+        if (score >= 5.5) return 2.0;
+        if (score >= 5.0) return 1.5;
+        if (score >= 4.0) return 1.0;
+
+        return 0;
     }
 }

@@ -13,6 +13,7 @@ import {
     PrimaryGeneratedColumn,
     UpdateDateColumn,
 } from 'typeorm';
+import { Grade } from '@/grades/entities/grade.entity';
 
 @Entity('course_registrations')
 @Index(['studentId', 'courseOfferingId'], { unique: true })
@@ -30,6 +31,9 @@ export class CourseRegistration {
     })
     @JoinColumn({ name: 'student_id' })
     student: Student;
+
+    @OneToOne(() => Grade, (grade) => grade.registration)
+    grade: Grade;
 
     @Column({ name: 'course_offering_id' })
     courseOfferingId: number;

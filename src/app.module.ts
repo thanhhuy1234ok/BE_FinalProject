@@ -36,6 +36,7 @@ import { NotificationModule } from './notification/notification.module';
 import { MailModule } from './mail/mail.module';
 import { DocumentModule } from './document/document.module';
 import { ChatAppModule } from './chat-app/chat-app.module';
+import { GradesModule } from './grades/grades.module';
 
 @Module({
     imports: [
@@ -79,6 +80,7 @@ import { ChatAppModule } from './chat-app/chat-app.module';
         MailModule,
         DocumentModule,
         ChatAppModule,
+        GradesModule,
     ],
     controllers: [AppController],
     providers: [AppService],

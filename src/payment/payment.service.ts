@@ -30,6 +30,7 @@ import { User } from '@/users/entities/user.entity';
 import { NotificationService } from '@/notification/notification.service';
 import { MailService } from '@/mail/mail.service';
 import { ChatAppService } from '@/chat-app/chat-app.service';
+import { Grade } from '@/grades/entities/grade.entity';
 @Injectable()
 export class PaymentService {
     private CREDIT_PRICE = 350000;
@@ -48,6 +49,9 @@ export class PaymentService {
 
         @InjectRepository(User)
         private userRepo: Repository<User>,
+
+        @InjectRepository(Grade)
+        private readonly gradeRepo: Repository<Grade>,
 
         private readonly notificationService: NotificationService,
 
@@ -436,6 +440,7 @@ export class PaymentService {
                                 subject: true,
                             },
                         },
+                        registration: true,
                     },
                 },
             });
@@ -484,6 +489,47 @@ export class PaymentService {
                         );
                     }
                 }
+            }
+
+            // tạo bảng điểm sau khi thanh toán thành công
+            for (const item of fullPayment.items || []) {
+                console.log('ITEM:', item);
+                console.log('REGISTRATION:', item.registration);
+
+                const registrationId = item.registration?.id;
+
+                if (!registrationId) {
+                    console.log(
+                        '❌ Không có registrationId trong payment item',
+                    );
+                    continue;
+                }
+
+                const existedGrade = await this.gradeRepo.findOne({
+                    where: {
+                        registrationId,
+                    },
+                });
+
+                if (existedGrade) {
+                    console.log('⚠️ Grade đã tồn tại:', existedGrade.id);
+                    continue;
+                }
+
+                const grade = this.gradeRepo.create({
+                    registrationId,
+                    attendanceScore: 0,
+                    midtermScore: 0,
+                    finalScore: 0,
+                    totalScore: 0,
+                    letterGrade: null,
+                    isPassed: false,
+                    isPublished: false,
+                });
+
+                await this.gradeRepo.save(grade);
+
+                console.log('✅ Đã tạo grade:', grade);
             }
 
             if (studentEmail) {
