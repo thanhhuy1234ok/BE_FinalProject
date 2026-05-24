@@ -1,0 +1,37 @@
+name: Deploy BE
+
+on:
+    push:
+        branches: [main]
+
+jobs:
+    deploy:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Deploy BE to VPS
+              uses: appleboy/ssh-action@v1.0.3
+              with:
+                  host: ${{ secrets.HOST }}
+                  username: root
+                  key: ${{ secrets.SSH_KEY }}
+                  script: |
+                      cd /srv/SetupDeploy/BE_FinalProject
+                      git pull
+
+                      cd /srv/SetupDeploy
+                      docker compose up -d --build BE_FinalProject
+
+            - name: Notify Telegram success
+              if: success()
+              run: |
+                  curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
+                    -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
+                    -d text="✅ Deploy BE thành công: ${{ github.repository }} - ${{ github.ref_name }}"
+
+            - name: Notify Telegram failed
+              if: failure()
+              run: |
+                  curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
+                    -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
+                    -d text="❌ Deploy BE thất bại: ${{ github.repository }} - ${{ github.ref_name }}"
