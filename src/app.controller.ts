@@ -13,7 +13,7 @@ export class AppController {
     }
 
     @Public()
-    @Get('/test')
+    @Get('/test1')
     test(): string {
         return this.appService.test();
     }
