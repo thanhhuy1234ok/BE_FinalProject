@@ -15,6 +15,8 @@ import { Public, ResponseMessage, User } from '@/helpers/decorator/customize';
 import type { IUser } from '@/helpers/types/user.interface';
 import type { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
+import { PaymentStatus } from '@/helpers/enum/enum.global';
+import { BulkUpdatePaymentStatusDto } from './dto/create-payment.dto';
 @Controller('payments')
 export class PaymentController {
     constructor(
@@ -51,6 +53,44 @@ export class PaymentController {
     @Post('invoice')
     createInvoice(@User() user: IUser) {
         return this.paymentService.createInvoice(user.id);
+    }
+
+    @Get('statistics')
+    getPaymentStatistics() {
+        return this.paymentService.getPaymentStatistics();
+    }
+
+    @Get('statistics-by-term')
+    getPaymentStatisticsByTerm() {
+        return this.paymentService.getPaymentStatisticsByTerm();
+    }
+
+    @Get('dashboard-overview')
+    getDashboardOverview() {
+        return this.paymentService.getDashboardOverview();
+    }
+
+    @Get('statistics-by-year')
+    getPaymentStatisticsByYear() {
+        return this.paymentService.getPaymentStatisticsByYear();
+    }
+
+    @Get('admin')
+    findAllForAdmin(
+        @Query('search') search?: string,
+        @Query('status') status?: PaymentStatus,
+        @Query('termId') termId?: string,
+    ) {
+        return this.paymentService.findAllForAdmin({
+            search,
+            status,
+            termId: termId ? Number(termId) : undefined,
+        });
+    }
+
+    @Patch('bulk-status')
+    bulkUpdateStatus(@Body() dto: BulkUpdatePaymentStatusDto) {
+        return this.paymentService.bulkUpdateStatus(dto);
     }
 
     @Public()

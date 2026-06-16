@@ -58,14 +58,9 @@ export class AttendanceController {
         @Req() req: any,
         @Body() dto: GenerateAttendanceQRDto,
     ) {
-        const ip =
-            req.headers['x-forwarded-for']?.toString().split(',')[0] ||
-            req.socket.remoteAddress;
-
         return this.attendanceService.generateAttendanceQR(
             lessonId,
             req.user.id,
-            ip,
             dto,
         );
     }
@@ -83,10 +78,6 @@ export class AttendanceController {
 
     @Post('scan-qr')
     scanQR(@Req() req: any, @Body() dto: ScanAttendanceQRDto) {
-        const ip =
-            req.headers['x-forwarded-for']?.toString().split(',')[0] ||
-            req.socket.remoteAddress;
-
-        return this.attendanceService.scanAttendanceQR(req.user.id, ip, dto);
+        return this.attendanceService.scanAttendanceQR(req.user.id, dto);
     }
 }

@@ -341,7 +341,6 @@ export class AttendanceService {
     async generateAttendanceQR(
         lessonId: number,
         teacherUserId: string,
-        ipAddr: string,
         dto: GenerateAttendanceQRDto,
     ) {
         const lesson = await this.lessonRepo.findOne({
@@ -372,7 +371,6 @@ export class AttendanceService {
         const payload = {
             lessonId: lesson.id,
             courseOfferingId: lesson.courseOffering.id,
-            teacherIp: this.normalizeIp(ipAddr),
             teacherLatitude: dto.latitude ?? null,
             teacherLongitude: dto.longitude ?? null,
             expiredAt,
@@ -437,15 +435,18 @@ export class AttendanceService {
     //     }
     // }
 
-    async scanAttendanceQR(
-        studentUserId: string,
-        ipAddr: string,
-        dto: ScanAttendanceQRDto,
-    ) {
+    async scanAttendanceQR(studentUserId: string, dto: ScanAttendanceQRDto) {
         console.log('\n================ SCAN QR =================');
         console.log('📌 DTO:', dto);
         console.log('📌 Student User ID:', studentUserId);
-        console.log('📌 Raw IP:', ipAddr);
+
+        if (!dto.token) {
+            throw new BadRequestException('Thiếu token QR');
+        }
+
+        if (!dto.lessonId) {
+            throw new BadRequestException('Thiếu lessonId');
+        }
 
         let payload: any;
 
@@ -456,11 +457,7 @@ export class AttendanceService {
             console.log('❌ JWT ERROR:', error);
             throw new BadRequestException('QR không hợp lệ');
         }
-        if (dto.lessonId && Number(dto.lessonId) !== Number(payload.lessonId)) {
-            throw new BadRequestException(
-                'QR không đúng buổi học bạn đang chọn',
-            );
-        }
+
         if (!payload.lessonId) {
             throw new BadRequestException('QR thiếu thông tin buổi học');
         }
@@ -469,25 +466,34 @@ export class AttendanceService {
             throw new BadRequestException('QR thiếu thông tin lớp học');
         }
 
-        if (!payload.expiredAt || Date.now() > payload.expiredAt) {
+        if (!payload.expiredAt || Date.now() > Number(payload.expiredAt)) {
             throw new BadRequestException('QR đã hết hạn');
         }
 
+        const dtoLessonId = Number(dto.lessonId);
         const qrLessonId = Number(payload.lessonId);
         const qrCourseOfferingId = Number(payload.courseOfferingId);
 
-        const studentIp = this.normalizeIp(ipAddr);
+        if (!dtoLessonId || Number.isNaN(dtoLessonId)) {
+            throw new BadRequestException('lessonId không hợp lệ');
+        }
 
-        console.log('📶 Teacher IP:', payload.teacherIp);
-        console.log('📶 Student IP:', studentIp);
+        if (!qrLessonId || Number.isNaN(qrLessonId)) {
+            throw new BadRequestException('lessonId trong QR không hợp lệ');
+        }
 
-        const sameWifi = this.isSameWifi(payload.teacherIp, studentIp);
-
-        console.log('📶 Same Wifi:', sameWifi);
-
-        if (!sameWifi) {
+        if (!qrCourseOfferingId || Number.isNaN(qrCourseOfferingId)) {
             throw new BadRequestException(
-                'Bạn phải cùng mạng wifi với giáo viên',
+                'courseOfferingId trong QR không hợp lệ',
+            );
+        }
+
+        console.log('📌 DTO Lesson ID:', dtoLessonId);
+        console.log('📌 QR Lesson ID:', qrLessonId);
+
+        if (dtoLessonId !== qrLessonId) {
+            throw new BadRequestException(
+                'QR không đúng buổi học bạn đang chọn',
             );
         }
 
@@ -525,13 +531,13 @@ export class AttendanceService {
                 id: qrLessonId,
             },
             relations: {
-                courseOffering: true,
+                courseOffering: {
+                    teacherSubject: {
+                        subject: true,
+                    },
+                },
             },
         });
-
-        console.log('📚 Lesson ID:', lesson?.id);
-        console.log('📚 QR CourseOffering ID:', qrCourseOfferingId);
-        console.log('📚 Lesson CourseOffering ID:', lesson?.courseOffering?.id);
 
         if (!lesson) {
             throw new NotFoundException('Không tìm thấy buổi học');
@@ -555,8 +561,6 @@ export class AttendanceService {
             },
         });
 
-        console.log('👨‍🎓 Student ID:', student?.id);
-
         if (!student) {
             throw new NotFoundException('Không tìm thấy sinh viên');
         }
@@ -566,17 +570,13 @@ export class AttendanceService {
                 student: {
                     id: student.id,
                 },
-
                 courseOffering: {
                     id: lesson.courseOffering.id,
                 },
-
                 status: RegistrationStatus.REGISTERED,
             },
-
             relations: {
                 student: true,
-
                 courseOffering: {
                     teacherSubject: {
                         subject: true,
@@ -584,16 +584,6 @@ export class AttendanceService {
                 },
             },
         });
-
-        console.log(
-            '📘 Lesson Subject:',
-            lesson.courseOffering.teacherSubject?.subject?.name,
-        );
-
-        console.log(
-            '📘 Registration Subject:',
-            registration?.courseOffering?.teacherSubject?.subject?.name,
-        );
 
         if (!registration) {
             throw new ForbiddenException(
@@ -623,12 +613,6 @@ export class AttendanceService {
             },
         });
 
-        console.log('📌 Old Attendance ID:', attendance?.id);
-        console.log(
-            '📌 Old Attendance Registration:',
-            attendance?.registrationId,
-        );
-
         if (
             attendance?.registrationId &&
             Number(attendance.registrationId) !== Number(registration.id)
@@ -643,8 +627,6 @@ export class AttendanceService {
             attendance.method = AttendanceMethod.QR;
             attendance.registrationId = registration.id;
             attendance.checkedAt = new Date();
-
-            console.log('♻️ Update attendance');
         } else {
             attendance = this.attendanceRepo.create({
                 lesson,
@@ -654,8 +636,6 @@ export class AttendanceService {
                 method: AttendanceMethod.QR,
                 checkedAt: new Date(),
             });
-
-            console.log('🆕 Create attendance');
         }
 
         await this.attendanceRepo.save(attendance);

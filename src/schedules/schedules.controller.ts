@@ -42,9 +42,17 @@ export class SchedulesController {
     }
 
     @Get('my-timetable')
-    async getMyTimeTable(@User() user: IUser) {
-        const userId = user.id;
-        return this.schedulesService.getMyTimeTable(userId);
+    async getMyTimeTable(
+        @User() user: IUser,
+        @Query('date') date?: string,
+        @Query('from') from?: string,
+        @Query('to') to?: string,
+    ) {
+        return this.schedulesService.getMyTimeTable(user.id, {
+            date,
+            from,
+            to,
+        });
     }
 
     @Get('teacher/today')
@@ -55,6 +63,25 @@ export class SchedulesController {
     @Get('teacher/courses')
     getTeachingCourses(@User() req: IUser) {
         return this.schedulesService.getTeachingCourses(req.id);
+    }
+
+    @Get('check-room-available')
+    checkRoomAvailable(
+        @Query('roomId') roomId: number,
+        @Query('lessonStart') lessonStart: number,
+        @Query('lessonEnd') lessonEnd: number,
+        @Query('startDate') startDate: string,
+        @Query('endDate') endDate: string,
+        @Query('daysOfWeek') daysOfWeek: string,
+    ) {
+        return this.schedulesService.checkRoomAvailable({
+            roomId: Number(roomId),
+            lessonStart: Number(lessonStart),
+            lessonEnd: Number(lessonEnd),
+            startDate,
+            endDate,
+            daysOfWeek: daysOfWeek.split(',').map(Number),
+        });
     }
 
     @Get('timetable')

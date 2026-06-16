@@ -14,6 +14,8 @@ import { CourseOffering } from '@/course-offering/entities/course-offering.entit
 import { Grade } from '@/grades/entities/grade.entity';
 import { Attendance } from '@/attendance/entities/attendance.entity';
 import { CourseRegistration } from '@/course-registration/entities/course-registration.entity';
+import { Curriculum } from '@/curriculum/entities/curriculum.entity';
+import { CurriculumSubject } from '@/curriculum_subjects/entities/curriculum_subject.entity';
 
 @Module({
     imports: [
@@ -30,6 +32,7 @@ import { CourseRegistration } from '@/course-registration/entities/course-regist
             Attendance,
             Grade,
             CourseRegistration,
+            CurriculumSubject,
         ]),
     ],
     controllers: [UsersController],

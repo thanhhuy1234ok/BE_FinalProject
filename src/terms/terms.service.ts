@@ -40,21 +40,21 @@ export class TermsService {
         }
 
         // ✅ Năm của ngày phải khớp với năm học
-        if (start.getFullYear() !== year || end.getFullYear() !== year) {
-            throw new BadRequestException(
-                `Kỳ ${semester} của năm ${year} phải có ngày bắt đầu và ngày kết thúc thuộc năm ${year}`,
-            );
-        }
+        // if (start.getFullYear() !== year || end.getFullYear() !== year) {
+        //     throw new BadRequestException(
+        //         `Kỳ ${semester} của năm ${year} phải có ngày bắt đầu và ngày kết thúc thuộc năm ${year}`,
+        //     );
+        // }
 
-        const existed = await this.termsRepository.findOne({
-            where: { year, semester },
-        });
+        // const existed = await this.termsRepository.findOne({
+        //     where: { year, semester },
+        // });
 
-        if (existed) {
-            throw new ConflictException(
-                `Kỳ ${semester} của năm ${year} đã tồn tại`,
-            );
-        }
+        // if (existed) {
+        //     throw new ConflictException(
+        //         `Kỳ ${semester} của năm ${year} đã tồn tại`,
+        //     );
+        // }
 
         const prerequisiteMap = {
             [SemesterEnum.HK1]: null,
