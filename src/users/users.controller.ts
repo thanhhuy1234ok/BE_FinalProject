@@ -70,6 +70,11 @@ export class UsersController {
         return this.usersService.getAttendanceOverview(req.id);
     }
 
+    @Get('statistics')
+    getStatistics() {
+        return this.usersService.getStatistics();
+    }
+
     @Get()
     findAll(
         @Query('current') currentPage: string,
@@ -82,6 +87,16 @@ export class UsersController {
     @Get(':id')
     findOne(@Param('id') id: string) {
         return this.usersService.findOne(id);
+    }
+
+    @Get(':id/teacher-teaching-overview')
+    getTeacherTeachingOverview(@Param('id') id: string) {
+        return this.usersService.getTeacherTeachingOverview(id);
+    }
+
+    @Get(':id/student-learning-overview')
+    getStudentLearningOverview(@Param('id') id: string) {
+        return this.usersService.getStudentLearningOverview(id);
     }
 
     @Patch(':id')

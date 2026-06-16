@@ -28,7 +28,11 @@ import { Student } from '@/users/entities/student.entity';
 import { Teacher } from '@/users/entities/teacher.entity';
 import dayjs from 'dayjs';
 import { CourseRegistration } from '@/course-registration/entities/course-registration.entity';
-
+type MyTimetableQuery = {
+    date?: string;
+    from?: string;
+    to?: string;
+};
 @Injectable()
 export class SchedulesService {
     constructor(
@@ -838,31 +842,60 @@ export class SchedulesService {
         return `${year}-${month}-${day}`;
     }
 
-    async getMyTimeTable(studentUserId: string) {
+    async getMyTimeTable(studentUserId: string, query: MyTimetableQuery) {
         const student = await this.studentRepository.findOne({
-            where: { user: { id: studentUserId } },
+            where: {
+                user: { id: studentUserId },
+            },
         });
 
         if (!student) {
             throw new NotFoundException('Không tìm thấy sinh viên');
         }
 
-        const now = new Date();
+        const { date, from, to } = query;
+
+        let startCheckDate: Date;
+        let endCheckDate: Date;
+
+        if (date) {
+            startCheckDate = new Date(date);
+            endCheckDate = new Date(date);
+        } else if (from && to) {
+            startCheckDate = new Date(from);
+            endCheckDate = new Date(to);
+        } else {
+            const now = new Date();
+            startCheckDate = now;
+            endCheckDate = now;
+        }
+
+        if (
+            Number.isNaN(startCheckDate.getTime()) ||
+            Number.isNaN(endCheckDate.getTime())
+        ) {
+            throw new BadRequestException('Ngày không hợp lệ');
+        }
 
         const schedules = await this.scheduleRepository.find({
             where: {
                 isActive: true,
-                startDate: LessThanOrEqual(now),
-                endDate: MoreThanOrEqual(now),
+
+                // schedule có hiệu lực trong khoảng ngày FE truyền lên
+                startDate: LessThanOrEqual(endCheckDate),
+                endDate: MoreThanOrEqual(startCheckDate),
+
                 courseOffering: {
                     courseRegistrations: {
                         student: { id: student.id },
+                        status: RegistrationStatus.REGISTERED,
                     },
                 },
             },
             relations: {
                 room: true,
                 courseOffering: {
+                    adminClass: true,
                     teacherSubject: {
                         teacher: {
                             user: true,
@@ -879,19 +912,27 @@ export class SchedulesService {
 
         return schedules.map((s) => ({
             id: s.id,
+
             dayOfWeek: s.dayOfWeek,
             lessonStart: s.lessonStart,
             lessonEnd: s.lessonEnd,
-            room: s.room?.name || 'N/A',
 
-            course: {
-                id: s.courseOffering.id,
-                code: s.courseOffering.code,
-                subject: s.courseOffering.teacherSubject?.subject?.name,
-                teacher:
-                    s.courseOffering.teacherSubject?.teacher?.user?.name ||
-                    'Chưa có',
-            },
+            startDate: s.startDate,
+            endDate: s.endDate,
+
+            roomName: s.room?.name || 'Chưa có phòng',
+
+            courseOfferingId: s.courseOffering?.id,
+            courseCode: s.courseOffering?.code || '',
+
+            subjectName:
+                s.courseOffering?.teacherSubject?.subject?.name || 'Môn học',
+
+            teacherName:
+                s.courseOffering?.teacherSubject?.teacher?.user?.name ||
+                'Đang cập nhật',
+
+            className: s.courseOffering?.adminClass?.name || '',
         }));
     }
 
@@ -1274,5 +1315,76 @@ export class SchedulesService {
 
             return a.lessonStart - b.lessonStart;
         });
+    }
+
+    async checkRoomAvailable(dto: {
+        roomId: number;
+        lessonStart: number;
+        lessonEnd: number;
+        startDate: string;
+        endDate: string;
+        daysOfWeek: number[];
+    }) {
+        const result = [];
+
+        for (const dayOfWeek of dto.daysOfWeek) {
+            const conflict = await this.scheduleRepository
+                .createQueryBuilder('schedule')
+                .leftJoinAndSelect('schedule.courseOffering', 'courseOffering')
+                .leftJoinAndSelect(
+                    'courseOffering.teacherSubject',
+                    'teacherSubject',
+                )
+                .leftJoinAndSelect('teacherSubject.subject', 'subject')
+                .where('schedule.roomId = :roomId', {
+                    roomId: dto.roomId,
+                })
+                .andWhere('schedule.dayOfWeek = :dayOfWeek', {
+                    dayOfWeek,
+                })
+                .andWhere(
+                    `
+                schedule.lessonStart <= :lessonEnd
+                AND schedule.lessonEnd >= :lessonStart
+                `,
+                    {
+                        lessonStart: dto.lessonStart,
+                        lessonEnd: dto.lessonEnd,
+                    },
+                )
+                .andWhere(
+                    `
+                schedule.startDate <= :endDate
+                AND schedule.endDate >= :startDate
+                `,
+                    {
+                        startDate: dto.startDate,
+                        endDate: dto.endDate,
+                    },
+                )
+                .getOne();
+
+            result.push({
+                dayOfWeek,
+                lessonStart: dto.lessonStart,
+                lessonEnd: dto.lessonEnd,
+                available: !conflict,
+                conflict: conflict
+                    ? {
+                          scheduleId: conflict.id,
+                          courseCode: conflict.courseOffering?.code,
+                          subjectName:
+                              conflict.courseOffering?.teacherSubject?.subject
+                                  ?.name,
+                          lessonStart: conflict.lessonStart,
+                          lessonEnd: conflict.lessonEnd,
+                          startDate: conflict.startDate,
+                          endDate: conflict.endDate,
+                      }
+                    : null,
+            });
+        }
+
+        return result;
     }
 }

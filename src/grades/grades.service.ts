@@ -274,6 +274,7 @@ export class GradesService {
             },
             {
                 isPublished: true,
+                publishedAt: new Date(),
             },
         );
 
@@ -400,5 +401,122 @@ export class GradesService {
                 isPublished: grade.isPublished,
             };
         });
+    }
+
+    // grades.service.ts
+
+    async getMyMobileGrades(userId: string) {
+        const student = await this.studentRepo.findOne({
+            where: {
+                user: {
+                    id: userId,
+                },
+            },
+            relations: {
+                user: true,
+            },
+        });
+
+        if (!student) {
+            throw new NotFoundException('Không tìm thấy sinh viên');
+        }
+
+        const grades = await this.gradeRepo.find({
+            where: {
+                isPublished: true,
+                registration: {
+                    student: {
+                        id: student.id,
+                    },
+                },
+            },
+            relations: {
+                registration: {
+                    student: true,
+                    courseOffering: {
+                        term: true,
+                        teacherSubject: {
+                            subject: true,
+                            teacher: {
+                                user: true,
+                            },
+                        },
+                    },
+                },
+            },
+            order: {
+                registration: {
+                    courseOffering: {
+                        term: {
+                            year: 'DESC',
+                            semester: 'DESC',
+                        },
+                    },
+                },
+            },
+        });
+
+        const semesterMap = new Map<number, any>();
+
+        for (const grade of grades) {
+            const courseOffering = grade.registration?.courseOffering;
+            const term = courseOffering?.term;
+            const teacherSubject = courseOffering?.teacherSubject;
+            const subject = teacherSubject?.subject;
+            const teacher = teacherSubject?.teacher;
+
+            if (!term) continue;
+
+            if (!semesterMap.has(term.id)) {
+                semesterMap.set(term.id, {
+                    id: term.id,
+                    semesterName: `${term.semester} - ${term.year}`,
+                    semester: term.semester,
+                    year: term.year,
+                    isActive: term.isActive,
+                    scores: [],
+                });
+            }
+
+            semesterMap.get(term.id).scores.push({
+                id: grade.id,
+                registrationId: grade.registrationId,
+
+                subject: subject
+                    ? {
+                          id: subject.id,
+                          code: subject.code,
+                          name: subject.name,
+                          credit: subject.credit,
+                      }
+                    : null,
+
+                courseOffering: courseOffering
+                    ? {
+                          id: courseOffering.id,
+                          code: courseOffering.code,
+                      }
+                    : null,
+
+                teacher: teacher
+                    ? {
+                          id: teacher.id,
+                          name: teacher.user?.name,
+                          email: teacher.user?.email,
+                      }
+                    : null,
+
+                attendanceScore: Number(grade.attendanceScore ?? 0),
+                midtermScore: Number(grade.midtermScore ?? 0),
+                finalScore: Number(grade.finalScore ?? 0),
+                totalScore: Number(grade.totalScore ?? 0),
+                letterGrade: grade.letterGrade,
+                isPassed: grade.isPassed,
+                isPublished: grade.isPublished,
+                publishedAt: grade.publishedAt,
+            });
+        }
+
+        return Array.from(semesterMap.values());
     }
 }

@@ -146,6 +146,7 @@ export class BuildingService {
             order,
             relations: {
                 campus: true,
+                rooms: true,
             },
         });
 

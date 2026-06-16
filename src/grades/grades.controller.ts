@@ -28,6 +28,11 @@ export class GradesController {
         return this.gradesService.getMyGrades(req.id);
     }
 
+    @Get('my-mobile')
+    getMyMobileGrades(@User() req: IUser) {
+        return this.gradesService.getMyMobileGrades(req.id);
+    }
+
     @Get('my-results')
     getMyResults(@User() req: IUser) {
         return this.gradesService.getMyResults(req.id);

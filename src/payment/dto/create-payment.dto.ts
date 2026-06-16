@@ -1,5 +1,14 @@
-import { PaymentMethod } from '@/helpers/enum/enum.global';
-import { IsEnum, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
+import { PaymentMethod, PaymentStatus } from '@/helpers/enum/enum.global';
+import {
+    ArrayNotEmpty,
+    IsArray,
+    IsEnum,
+    IsInt,
+    IsNotEmpty,
+    IsOptional,
+    IsString,
+    Min,
+} from 'class-validator';
 
 export class PayPaymentDto {
     @IsEnum(PaymentMethod)
@@ -23,4 +32,14 @@ export class CreateVnpayDto {
 
     @IsNotEmpty({ message: 'paymentRef không được để trống' })
     paymentRef: string;
+}
+
+export class BulkUpdatePaymentStatusDto {
+    @IsArray()
+    @ArrayNotEmpty()
+    @IsInt({ each: true })
+    ids: number[];
+
+    @IsEnum(PaymentStatus)
+    status: PaymentStatus;
 }
