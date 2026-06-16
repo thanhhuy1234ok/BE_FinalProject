@@ -7,7 +7,7 @@ import { CreateUserDto, ImportStudentExcelDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
-import { DataSource, EntityManager, In, Not, Repository } from 'typeorm';
+import { DataSource, EntityManager, ILike, In, Not, Repository } from 'typeorm';
 import { Role } from '@/roles/entities/role.entity';
 import {
     ADMIN_ROLE,
@@ -33,6 +33,8 @@ import { Grade } from '@/grades/entities/grade.entity';
 import { Attendance } from '@/attendance/entities/attendance.entity';
 import { CourseRegistration } from '@/course-registration/entities/course-registration.entity';
 import dayjs from 'dayjs';
+import { Curriculum } from '@/curriculum/entities/curriculum.entity';
+import { CurriculumSubject } from '@/curriculum_subjects/entities/curriculum_subject.entity';
 
 @Injectable()
 export class UsersService {
@@ -72,6 +74,10 @@ export class UsersService {
 
         @InjectRepository(Department)
         private departmentRepo: Repository<Department>,
+
+        @InjectRepository(CurriculumSubject)
+        private readonly curriculumSubjectRepository: Repository<CurriculumSubject>,
+
         private readonly dataSource: DataSource,
     ) {}
 
@@ -269,17 +275,36 @@ export class UsersService {
             defaultSort: { id: 'DESC' },
         });
 
-        const finalWhere = {
+        const finalWhere: any = {
             ...where,
-            role: {
-                ...(where as any)?.role,
-                name: Not(ADMIN_ROLE),
-            },
         };
+
+        // mặc định không lấy admin
+        finalWhere.role = {
+            ...(where as any)?.role,
+            name: Not(ADMIN_ROLE),
+        };
+
+        // nếu FE truyền role.name=teacher hoặc role=teacher
+        const query = new URLSearchParams(qs);
+        const roleName =
+            query.get('role.name') ||
+            query.get('role') ||
+            query.get('roleName');
+
+        if (roleName) {
+            finalWhere.role = {
+                ...(where as any)?.role,
+                name: ILike(`%${roleName}%`),
+            };
+        }
 
         const totalItems = await this.usersRepository.count({
             where: finalWhere,
             withDeleted: true,
+            relations: {
+                role: true,
+            },
         });
 
         const totalPages = Math.ceil(totalItems / pageLimit);
@@ -1208,6 +1233,7 @@ export class UsersService {
                 teacherSubjects: {
                     subject: true,
                 },
+                department: true,
             },
         });
 
@@ -1221,9 +1247,6 @@ export class UsersService {
                     teacher: {
                         id: teacher.id,
                     },
-                },
-                term: {
-                    isActive: true,
                 },
             },
             relations: {
@@ -1592,5 +1615,254 @@ export class UsersService {
         if (score >= 4.0) return 1.0;
 
         return 0;
+    }
+
+    async getStatistics() {
+        const [totalUsers, totalStudents, totalTeachers] = await Promise.all([
+            this.usersRepository.count(),
+
+            this.usersRepository.count({
+                where: {
+                    role: {
+                        name: 'STUDENT',
+                    },
+                },
+            }),
+
+            this.usersRepository.count({
+                where: {
+                    role: {
+                        name: 'TEACHER',
+                    },
+                },
+            }),
+        ]);
+
+        return {
+            totalUsers,
+            totalStudents,
+            totalTeachers,
+        };
+    }
+
+    async getTeacherTeachingOverview(userId: string) {
+        const teacher = await this.teacherRepo.findOne({
+            where: {
+                user: {
+                    id: userId,
+                },
+            },
+        });
+
+        if (!teacher) {
+            throw new NotFoundException('Không tìm thấy giảng viên');
+        }
+
+        const courses = await this.courseOfferingRepo.find({
+            where: {
+                teacherSubject: {
+                    teacher: {
+                        id: teacher.id,
+                    },
+                },
+            },
+            relations: {
+                term: true,
+                teacherSubject: {
+                    subject: true,
+                },
+                courseRegistrations: true,
+            },
+            order: {
+                id: 'DESC',
+            },
+        });
+
+        return courses.map((item) => ({
+            id: item.id,
+            code: item.code,
+
+            subjectName: item.teacherSubject?.subject?.name || 'N/A',
+
+            subjectCode: item.teacherSubject?.subject?.code || 'N/A',
+
+            credit: item.teacherSubject?.subject?.credit || 0,
+
+            termName: item.term?.semester || 'N/A',
+
+            year: item.term?.year || 0,
+
+            status: item.status,
+
+            totalStudents: item.courseRegistrations?.length || 0,
+        }));
+    }
+
+    async getStudentLearningOverview(userId: string) {
+        const student = await this.studentRepo.findOne({
+            where: {
+                user: {
+                    id: userId,
+                },
+            },
+            relations: {
+                user: true,
+                major: true,
+                yearOfAdmission: true,
+            },
+        });
+
+        if (!student) {
+            throw new NotFoundException('Không tìm thấy sinh viên');
+        }
+
+        if (!student.major?.id || !student.yearOfAdmission?.id) {
+            throw new BadRequestException(
+                'Sinh viên chưa có ngành học hoặc năm nhập học',
+            );
+        }
+
+        const curriculumSubjects = await this.curriculumSubjectRepository.find({
+            where: {
+                curriculum: {
+                    major: {
+                        id: student.major.id,
+                    },
+                    yearOfAdmission: {
+                        id: student.yearOfAdmission.id,
+                    },
+                },
+            },
+            relations: {
+                subject: true,
+                curriculum: {
+                    major: true,
+                    yearOfAdmission: true,
+                },
+            },
+        });
+
+        const grades = await this.gradeRepo.find({
+            where: {
+                registration: {
+                    student: {
+                        id: student.id,
+                    },
+                },
+            },
+            relations: {
+                registration: {
+                    courseOffering: {
+                        term: true,
+                        teacherSubject: {
+                            subject: true,
+                        },
+                    },
+                },
+            },
+            order: {
+                id: 'DESC',
+            },
+        });
+
+        const totalCredits = curriculumSubjects.reduce((sum, item) => {
+            return sum + Number(item.subject?.credit || 0);
+        }, 0);
+
+        const passedSubjectIds = new Set<number>();
+
+        for (const grade of grades) {
+            const subject =
+                grade.registration?.courseOffering?.teacherSubject?.subject;
+
+            if (!subject?.id) continue;
+            if (!grade.isPublished) continue;
+            if (!grade.isPassed) continue;
+
+            passedSubjectIds.add(subject.id);
+        }
+
+        const passedCredits = curriculumSubjects.reduce((sum, item) => {
+            if (!item.subject?.id) return sum;
+
+            if (passedSubjectIds.has(item.subject.id)) {
+                return sum + Number(item.subject.credit || 0);
+            }
+
+            return sum;
+        }, 0);
+
+        const publishedGrades = grades.filter((item) => item.isPublished);
+
+        const totalScore = publishedGrades.reduce((sum, item) => {
+            return sum + Number(item.totalScore || 0);
+        }, 0);
+
+        const gpa =
+            publishedGrades.length > 0
+                ? Number((totalScore / publishedGrades.length).toFixed(2))
+                : 0;
+
+        const progressPercent =
+            totalCredits > 0
+                ? Math.round((passedCredits / totalCredits) * 100)
+                : 0;
+
+        return {
+            curriculum: {
+                majorId: student.major.id,
+                majorName: student.major.name,
+                yearOfAdmissionId: student.yearOfAdmission.id,
+                year: student.yearOfAdmission.year,
+            },
+
+            totalCurriculumSubjects: curriculumSubjects.length,
+            totalCredits,
+            passedCredits,
+            remainingCredits: Math.max(totalCredits - passedCredits, 0),
+            gpa,
+            progressPercent,
+
+            grades: grades.map((item) => {
+                const subject =
+                    item.registration?.courseOffering?.teacherSubject?.subject;
+
+                return {
+                    id: item.id,
+
+                    subjectId: subject?.id || null,
+
+                    subjectName: subject?.name || 'N/A',
+
+                    subjectCode: subject?.code || 'N/A',
+
+                    credit: subject?.credit || 0,
+
+                    termName:
+                        item.registration?.courseOffering?.term?.semester ||
+                        'N/A',
+
+                    year: item.registration?.courseOffering?.term?.year || 0,
+
+                    attendanceScore: item.attendanceScore,
+                    midtermScore: item.midtermScore,
+                    finalScore: item.finalScore,
+                    totalScore: item.totalScore,
+                    letterGrade: item.letterGrade,
+                    isPassed: item.isPassed,
+                    isPublished: item.isPublished,
+                };
+            }),
+
+            curriculumSubjects: curriculumSubjects.map((item) => ({
+                subjectId: item.subject?.id,
+                subjectName: item.subject?.name,
+                subjectCode: item.subject?.code,
+                credit: item.subject?.credit || 0,
+                isPassed: item.subject?.id
+                    ? passedSubjectIds.has(item.subject.id)
+                    : false,
+            })),
+        };
     }
 }

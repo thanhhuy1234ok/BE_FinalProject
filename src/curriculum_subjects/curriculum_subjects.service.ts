@@ -42,7 +42,6 @@ export class CurriculumSubjectsService {
         private readonly dataSource: DataSource,
     ) {}
     async create(dto: CreateCurriculumSubjectDto) {
-        return;
         // 1) validate year/semester basic
         if (!Number.isInteger(dto.year) || dto.year < 1 || dto.year > 10) {
             throw new BadRequestException('year must be an integer >= 1');
@@ -159,19 +158,186 @@ export class CurriculumSubjectsService {
         };
     }
 
+    // async importCurriculumSubjectsName(
+    //     dto: ImportCurriculumSubjectExcelNameDto,
+    // ) {
+    //     const inserted: CurriculumSubject[] = [];
+    //     const skipped: {
+    //         curriculumName: string;
+    //         subjectName: string;
+    //         reason: string;
+    //     }[] = [];
+
+    //     for (const item of dto.items) {
+    //         const curriculumName = item.curriculumName?.trim();
+    //         const subjectName = item.subjectName?.trim();
+
+    //         if (!curriculumName) {
+    //             skipped.push({
+    //                 curriculumName: '',
+    //                 subjectName,
+    //                 reason: 'Tên chương trình đào tạo bị trống',
+    //             });
+    //             continue;
+    //         }
+
+    //         if (!subjectName) {
+    //             skipped.push({
+    //                 curriculumName,
+    //                 subjectName: '',
+    //                 reason: 'Tên môn học bị trống',
+    //             });
+    //             continue;
+    //         }
+
+    //         const curriculum = await this.curriculumRepository.findOne({
+    //             where: { name: curriculumName },
+    //         });
+
+    //         if (!curriculum) {
+    //             skipped.push({
+    //                 curriculumName,
+    //                 subjectName,
+    //                 reason: `Không tìm thấy chương trình đào tạo`,
+    //             });
+    //             continue;
+    //         }
+
+    //         const subject = await this.subjectRepository.findOne({
+    //             where: { name: subjectName },
+    //         });
+
+    //         if (!subject) {
+    //             skipped.push({
+    //                 curriculumName,
+    //                 subjectName,
+    //                 reason: `Không tìm thấy môn học`,
+    //             });
+    //             continue;
+    //         }
+
+    //         const existed = await this.curriculumSubjectRepository.findOne({
+    //             where: {
+    //                 curriculumId: curriculum.id,
+    //                 subjectId: subject.id,
+    //             },
+    //         });
+
+    //         if (existed) {
+    //             skipped.push({
+    //                 curriculumName,
+    //                 subjectName,
+    //                 reason: 'Môn học đã tồn tại trong chương trình đào tạo',
+    //             });
+    //             continue;
+    //         }
+
+    //         try {
+    //             const entity = this.curriculumSubjectRepository.create({
+    //                 curriculumId: curriculum.id,
+    //                 subjectId: subject.id,
+    //                 semesterNumber: item.semesterNumber,
+    //                 isRequired: item.isRequired ?? true,
+    //                 ordering: item.ordering ?? 0,
+    //                 prerequisiteRule: item.prerequisiteRule ?? null,
+    //             });
+
+    //             const saved =
+    //                 await this.curriculumSubjectRepository.save(entity);
+    //             inserted.push(saved);
+    //         } catch (error) {
+    //             skipped.push({
+    //                 curriculumName,
+    //                 subjectName,
+    //                 reason: 'Lỗi khi tạo dữ liệu',
+    //             });
+    //         }
+    //     }
+
+    //     return {
+    //         countSuccess: inserted.length,
+    //         countError: skipped.length,
+    //         inserted,
+    //         skipped,
+    //     };
+    // }
+
     async importCurriculumSubjectsName(
         dto: ImportCurriculumSubjectExcelNameDto,
     ) {
-        const inserted: CurriculumSubject[] = [];
         const skipped: {
             curriculumName: string;
             subjectName: string;
             reason: string;
         }[] = [];
 
-        for (const item of dto.items) {
-            const curriculumName = item.curriculumName?.trim();
-            const subjectName = item.subjectName?.trim();
+        const items = dto.items || [];
+
+        if (!items.length) {
+            return {
+                countSuccess: 0,
+                countError: 0,
+                inserted: [],
+                skipped: [],
+            };
+        }
+
+        const normalize = (value?: string) => value?.trim() || '';
+
+        const curriculumNames = [
+            ...new Set(
+                items.map((i) => normalize(i.curriculumName)).filter(Boolean),
+            ),
+        ];
+
+        const subjectNames = [
+            ...new Set(
+                items.map((i) => normalize(i.subjectName)).filter(Boolean),
+            ),
+        ];
+
+        const [curriculums, subjects] = await Promise.all([
+            this.curriculumRepository.find({
+                where: { name: In(curriculumNames) },
+            }),
+            this.subjectRepository.find({
+                where: { name: In(subjectNames) },
+            }),
+        ]);
+
+        const curriculumMap = new Map(
+            curriculums.map((c) => [c.name.trim(), c]),
+        );
+        const subjectMap = new Map(subjects.map((s) => [s.name.trim(), s]));
+
+        const curriculumIds = curriculums.map((c) => c.id);
+        const subjectIds = subjects.map((s) => s.id);
+
+        const existedRelations =
+            curriculumIds.length && subjectIds.length
+                ? await this.curriculumSubjectRepository.find({
+                      where: {
+                          curriculumId: In(curriculumIds),
+                          subjectId: In(subjectIds),
+                      },
+                      select: {
+                          id: true,
+                          curriculumId: true,
+                          subjectId: true,
+                      },
+                  })
+                : [];
+
+        const existedSet = new Set(
+            existedRelations.map((x) => `${x.curriculumId}-${x.subjectId}`),
+        );
+
+        const excelSet = new Set<string>();
+        const entities: CurriculumSubject[] = [];
+
+        for (const item of items) {
+            const curriculumName = normalize(item.curriculumName);
+            const subjectName = normalize(item.subjectName);
 
             if (!curriculumName) {
                 skipped.push({
@@ -191,40 +357,50 @@ export class CurriculumSubjectsService {
                 continue;
             }
 
-            const curriculum = await this.curriculumRepository.findOne({
-                where: { name: curriculumName },
-            });
+            const curriculum = curriculumMap.get(curriculumName);
+            const subject = subjectMap.get(subjectName);
 
             if (!curriculum) {
                 skipped.push({
                     curriculumName,
                     subjectName,
-                    reason: `Không tìm thấy chương trình đào tạo`,
+                    reason: 'Không tìm thấy chương trình đào tạo',
                 });
                 continue;
             }
-
-            const subject = await this.subjectRepository.findOne({
-                where: { name: subjectName },
-            });
 
             if (!subject) {
                 skipped.push({
                     curriculumName,
                     subjectName,
-                    reason: `Không tìm thấy môn học`,
+                    reason: 'Không tìm thấy môn học',
                 });
                 continue;
             }
 
-            const existed = await this.curriculumSubjectRepository.findOne({
-                where: {
-                    curriculumId: curriculum.id,
-                    subjectId: subject.id,
-                },
-            });
+            const semesterNumber = Number(item.semesterNumber);
 
-            if (existed) {
+            if (!semesterNumber || semesterNumber <= 0) {
+                skipped.push({
+                    curriculumName,
+                    subjectName,
+                    reason: 'Học kỳ không hợp lệ',
+                });
+                continue;
+            }
+
+            const key = `${curriculum.id}-${subject.id}`;
+
+            if (excelSet.has(key)) {
+                skipped.push({
+                    curriculumName,
+                    subjectName,
+                    reason: 'Môn học bị trùng trong file Excel',
+                });
+                continue;
+            }
+
+            if (existedSet.has(key)) {
                 skipped.push({
                     curriculumName,
                     subjectName,
@@ -233,26 +409,27 @@ export class CurriculumSubjectsService {
                 continue;
             }
 
-            try {
-                const entity = this.curriculumSubjectRepository.create({
+            excelSet.add(key);
+            existedSet.add(key);
+
+            entities.push(
+                this.curriculumSubjectRepository.create({
                     curriculumId: curriculum.id,
                     subjectId: subject.id,
-                    semesterNumber: item.semesterNumber,
+                    semesterNumber,
                     isRequired: item.isRequired ?? true,
-                    ordering: item.ordering ?? 0,
-                    prerequisiteRule: item.prerequisiteRule ?? null,
-                });
+                    ordering: Number(item.ordering ?? 0),
+                    prerequisiteRule: normalize(item.prerequisiteRule),
+                }),
+            );
+        }
 
-                const saved =
-                    await this.curriculumSubjectRepository.save(entity);
-                inserted.push(saved);
-            } catch (error) {
-                skipped.push({
-                    curriculumName,
-                    subjectName,
-                    reason: 'Lỗi khi tạo dữ liệu',
-                });
-            }
+        let inserted: CurriculumSubject[] = [];
+
+        if (entities.length) {
+            inserted = await this.curriculumSubjectRepository.save(entities, {
+                chunk: 500,
+            });
         }
 
         return {

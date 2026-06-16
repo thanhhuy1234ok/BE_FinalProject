@@ -31,6 +31,8 @@ import { NotificationService } from '@/notification/notification.service';
 import { MailService } from '@/mail/mail.service';
 import { ChatAppService } from '@/chat-app/chat-app.service';
 import { Grade } from '@/grades/entities/grade.entity';
+import { Term } from '@/terms/entities/term.entity';
+import { BulkUpdatePaymentStatusDto } from './dto/create-payment.dto';
 @Injectable()
 export class PaymentService {
     private CREDIT_PRICE = 350000;
@@ -52,6 +54,9 @@ export class PaymentService {
 
         @InjectRepository(Grade)
         private readonly gradeRepo: Repository<Grade>,
+
+        @InjectRepository(Term)
+        private readonly termRepository: Repository<Term>,
 
         private readonly notificationService: NotificationService,
 
@@ -424,6 +429,7 @@ export class PaymentService {
             payment.paidAt = new Date();
             payment.transactionRef = query.vnp_TransactionNo;
             payment.gatewayResponseCode = query.vnp_ResponseCode;
+            payment.paymentMethod = PaymentMethod.VNPAY;
 
             await this.paymentRepo.save(payment);
 
@@ -572,6 +578,318 @@ export class PaymentService {
             responseCode: query.vnp_ResponseCode,
             paymentId: payment.id,
             status: payment.status,
+        };
+    }
+
+    async getPaymentStatistics() {
+        const [
+            totalPayments,
+            pendingPayments,
+            paidPayments,
+            failedPayments,
+            overduePayments,
+            cancelledPayments,
+        ] = await Promise.all([
+            this.paymentRepo.count(),
+
+            this.paymentRepo.count({
+                where: { status: PaymentStatus.PENDING },
+            }),
+
+            this.paymentRepo.count({
+                where: { status: PaymentStatus.PAID },
+            }),
+
+            this.paymentRepo.count({
+                where: { status: PaymentStatus.FAILED },
+            }),
+
+            this.paymentRepo.count({
+                where: { status: PaymentStatus.OVERDUE },
+            }),
+
+            this.paymentRepo.count({
+                where: { status: PaymentStatus.CANCELLED },
+            }),
+        ]);
+
+        const revenueResult = await this.paymentRepo
+            .createQueryBuilder('payment')
+            .select('COALESCE(SUM(payment.totalAmount), 0)', 'totalRevenue')
+            .where('payment.status = :status', {
+                status: PaymentStatus.PAID,
+            })
+            .getRawOne();
+
+        const pendingAmountResult = await this.paymentRepo
+            .createQueryBuilder('payment')
+            .select('COALESCE(SUM(payment.totalAmount), 0)', 'pendingAmount')
+            .where('payment.status = :status', {
+                status: PaymentStatus.PENDING,
+            })
+            .getRawOne();
+
+        const totalRevenue = Number(revenueResult?.totalRevenue || 0);
+        const pendingAmount = Number(pendingAmountResult?.pendingAmount || 0);
+
+        const paidRate =
+            totalPayments > 0
+                ? Math.round((paidPayments / totalPayments) * 100)
+                : 0;
+
+        return {
+            totalPayments,
+            pendingPayments,
+            paidPayments,
+            failedPayments,
+            overduePayments,
+            cancelledPayments,
+
+            totalRevenue,
+            pendingAmount,
+            paidRate,
+        };
+    }
+
+    async getPaymentStatisticsByTerm() {
+        const data = await this.paymentRepo
+            .createQueryBuilder('payment')
+            .leftJoin('payment.term', 'term')
+            .select('term.id', 'termId')
+            .addSelect('term.semester', 'semester')
+            .addSelect('term.year', 'year')
+            .addSelect('COUNT(payment.id)', 'totalPayments')
+            .addSelect(
+                `COUNT(CASE WHEN payment.status = 'PAID' THEN 1 END)`,
+                'paidPayments',
+            )
+            .addSelect(
+                `COUNT(CASE WHEN payment.status = 'PENDING' THEN 1 END)`,
+                'pendingPayments',
+            )
+            .addSelect(
+                `COALESCE(SUM(CASE WHEN payment.status = 'PAID' THEN payment.totalAmount ELSE 0 END), 0)`,
+                'totalRevenue',
+            )
+            .groupBy('term.id')
+            .addGroupBy('term.semester')
+            .addGroupBy('term.year')
+            .orderBy('term.year', 'ASC')
+            .addOrderBy('term.semester', 'ASC')
+            .getRawMany();
+
+        return data.map((item) => ({
+            termId: Number(item.termId),
+            semester: item.semester,
+            year: Number(item.year),
+            totalPayments: Number(item.totalPayments),
+            paidPayments: Number(item.paidPayments),
+            pendingPayments: Number(item.pendingPayments),
+            totalRevenue: Number(item.totalRevenue),
+        }));
+    }
+
+    // payment.service.ts
+
+    async getDashboardOverview() {
+        const activeTerm = await this.termRepository.findOne({
+            where: {
+                isActive: true,
+            },
+            order: {
+                year: 'DESC',
+                semester: 'DESC',
+            },
+        });
+
+        const totalPayments = await this.paymentRepo.count();
+
+        const paidPayments = await this.paymentRepo.count({
+            where: {
+                status: PaymentStatus.PAID,
+            },
+        });
+
+        const paidRate =
+            totalPayments > 0
+                ? Math.round((paidPayments / totalPayments) * 100)
+                : 0;
+
+        const revenueByTerm = await this.paymentRepo
+            .createQueryBuilder('payment')
+            .leftJoin('payment.term', 'term')
+            .select('term.id', 'termId')
+            .addSelect('term.semester', 'semester')
+            .addSelect('term.year', 'year')
+            .addSelect(
+                `COALESCE(SUM(CASE WHEN payment.status = :paid THEN payment.totalAmount ELSE 0 END), 0)`,
+                'totalRevenue',
+            )
+            .setParameter('paid', PaymentStatus.PAID)
+            .groupBy('term.id')
+            .addGroupBy('term.semester')
+            .addGroupBy('term.year')
+            .orderBy(
+                `COALESCE(SUM(CASE WHEN payment.status = :paid THEN payment.totalAmount ELSE 0 END), 0)`,
+                'DESC',
+            )
+            .getRawMany();
+
+        const bestTermRaw = revenueByTerm[0];
+
+        const bestTerm = bestTermRaw
+            ? `${bestTermRaw.semester} - ${bestTermRaw.year}`
+            : 'Chưa có';
+
+        let revenueGrowth = 0;
+
+        if (revenueByTerm.length >= 2) {
+            const currentRevenue = Number(revenueByTerm[0]?.totalRevenue || 0);
+            const previousRevenue = Number(revenueByTerm[1]?.totalRevenue || 0);
+
+            if (previousRevenue > 0) {
+                revenueGrowth = Number(
+                    (
+                        ((currentRevenue - previousRevenue) / previousRevenue) *
+                        100
+                    ).toFixed(1),
+                );
+            }
+        }
+
+        return {
+            activeTerm: activeTerm
+                ? `${activeTerm.semester} - ${activeTerm.year}`
+                : 'Chưa có',
+
+            paidRate,
+            revenueGrowth,
+            bestTerm,
+        };
+    }
+
+    // payment.service.ts
+    async getPaymentStatisticsByYear() {
+        const data = await this.paymentRepo
+            .createQueryBuilder('payment')
+            .leftJoin('payment.term', 'term')
+            .select('term.year', 'year')
+            .addSelect('COUNT(payment.id)', 'totalPayments')
+            .addSelect(
+                `COUNT(CASE WHEN payment.status = 'PAID' THEN 1 END)`,
+                'paidPayments',
+            )
+            .addSelect(
+                `COUNT(CASE WHEN payment.status = 'PENDING' THEN 1 END)`,
+                'pendingPayments',
+            )
+            .addSelect(
+                `COALESCE(SUM(CASE WHEN payment.status = 'PAID' THEN payment.totalAmount ELSE 0 END), 0)`,
+                'totalRevenue',
+            )
+            .where('term.year IS NOT NULL')
+            .groupBy('term.year')
+            .orderBy('term.year', 'ASC')
+            .getRawMany();
+
+        return data.map((item) => ({
+            year: Number(item.year),
+            totalRevenue: Number(item.totalRevenue || 0),
+            totalPayments: Number(item.totalPayments || 0),
+            paidPayments: Number(item.paidPayments || 0),
+            pendingPayments: Number(item.pendingPayments || 0),
+        }));
+    }
+
+    async findAllForAdmin(query: {
+        search?: string;
+        status?: PaymentStatus;
+        termId?: number;
+    }) {
+        const { search, status, termId } = query;
+
+        const qb = this.paymentRepo
+            .createQueryBuilder('payment')
+            .leftJoinAndSelect('payment.student', 'student')
+            .leftJoinAndSelect('student.user', 'user')
+            .leftJoinAndSelect('payment.term', 'term')
+            .leftJoinAndSelect('payment.items', 'items')
+            .leftJoinAndSelect('items.courseOffering', 'courseOffering')
+            .leftJoinAndSelect(
+                'courseOffering.teacherSubject',
+                'teacherSubject',
+            )
+            .leftJoinAndSelect('teacherSubject.subject', 'subject')
+            .leftJoinAndSelect('items.registration', 'registration')
+            .orderBy('payment.createdAt', 'DESC');
+
+        if (status) {
+            qb.andWhere('payment.status = :status', { status });
+        }
+
+        if (termId) {
+            qb.andWhere('payment.termId = :termId', { termId });
+        }
+
+        if (search?.trim()) {
+            qb.andWhere(
+                `(
+                LOWER(payment.code) LIKE LOWER(:search)
+                OR LOWER(user.name) LIKE LOWER(:search)
+                OR LOWER(user.email) LIKE LOWER(:search)
+                OR LOWER(student.studentCode) LIKE LOWER(:search)
+            )`,
+                {
+                    search: `%${search.trim()}%`,
+                },
+            );
+        }
+
+        const result = await qb.getMany();
+
+        return {
+            result,
+            total: result.length,
+        };
+    }
+
+    async bulkUpdateStatus(dto: BulkUpdatePaymentStatusDto) {
+        const { ids, status } = dto;
+
+        const payments = await this.paymentRepo.find({
+            where: {
+                id: In(ids),
+            },
+        });
+
+        if (!payments.length) {
+            throw new NotFoundException('Không tìm thấy hóa đơn');
+        }
+
+        const invalidPayments = payments.filter(
+            (item) =>
+                item.status === PaymentStatus.PAID ||
+                item.status === PaymentStatus.CANCELLED,
+        );
+
+        if (invalidPayments.length) {
+            throw new BadRequestException(
+                'Có hóa đơn đã thanh toán hoặc đã hủy, không thể cập nhật',
+            );
+        }
+
+        await this.paymentRepo.update(
+            {
+                id: In(ids),
+            },
+            {
+                status,
+                paymentMethod: PaymentMethod.CASH,
+            },
+        );
+
+        return {
+            message: `Đã cập nhật ${payments.length} hóa đơn`,
         };
     }
 }

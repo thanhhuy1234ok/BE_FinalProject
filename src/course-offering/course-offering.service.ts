@@ -196,7 +196,6 @@ export class CourseOfferingService {
         const subjectName = queryParams.get('subject');
         const teacherName = queryParams.get('teacherName');
         const adminClassName = queryParams.get('adminClassName');
-        const semester = queryParams.get('semester');
         const code = queryParams.get('code');
         const keyword = queryParams.get('keyword');
 
@@ -277,12 +276,6 @@ export class CourseOfferingService {
             );
         }
 
-        if (semester?.trim()) {
-            baseQb.andWhere('LOWER(term.semester) LIKE LOWER(:semester)', {
-                semester: `%${semester.trim()}%`,
-            });
-        }
-
         if (keyword?.trim()) {
             baseQb.andWhere(
                 `(
@@ -290,8 +283,12 @@ export class CourseOfferingService {
                 OR LOWER(subject.name) LIKE LOWER(:keyword)
                 OR LOWER(teacherUser.name) LIKE LOWER(:keyword)
                 OR LOWER(adminClass.name) LIKE LOWER(:keyword)
+                OR CAST(term.semester AS TEXT) ILIKE :keyword
+                OR CAST(term.year AS TEXT) ILIKE :keyword
             )`,
-                { keyword: `%${keyword.trim()}%` },
+                {
+                    keyword: `%${keyword.trim()}%`,
+                },
             );
         }
 
@@ -305,13 +302,16 @@ export class CourseOfferingService {
             subjectCode: 'subject.code',
             teacherName: 'teacherUser.name',
             adminClassName: 'adminClass.name',
+            termId: 'courseOffering.termId',
             semester: 'term.semester',
+            year: 'term.year',
         };
 
         const totalQb = baseQb
             .clone()
             .select('courseOffering.id')
             .distinct(true);
+
         const totalItems = await totalQb.getCount();
 
         const dataQb = baseQb
@@ -399,16 +399,91 @@ export class CourseOfferingService {
         return await this.courseOfferingRepository.save(courseOffering);
     }
 
+    // async bulkOpenRegistration(dto: BulkUpdateCourseOfferingStatusDto) {
+    //     const { ids } = dto;
+
+    //     const courseOfferings = await this.courseOfferingRepository.find({
+    //         where: {
+    //             id: In(ids),
+    //         },
+    //         relations: {
+    //             schedules: true,
+    //             term: true,
+    //         },
+    //     });
+
+    //     if (!courseOfferings.length) {
+    //         throw new NotFoundException('Không tìm thấy lớp học phần nào');
+    //     }
+
+    //     const updated: number[] = [];
+    //     const skipped: Array<{ id: number; code?: string; reason: string }> =
+    //         [];
+
+    //     for (const item of courseOfferings) {
+    //         if (item.status !== CourseOfferingStatus.WAITING_REGISTRATION) {
+    //             skipped.push({
+    //                 id: item.id,
+    //                 code: item.code,
+    //                 reason: 'Chỉ có thể mở đăng ký cho lớp đang ở trạng thái chờ đăng ký',
+    //             });
+    //             continue;
+    //         }
+
+    //         if (!item.schedules || item.schedules.length === 0) {
+    //             skipped.push({
+    //                 id: item.id,
+    //                 code: item.code,
+    //                 reason: 'Lớp học phần chưa có lịch học',
+    //             });
+    //             continue;
+    //         }
+
+    //         item.status = CourseOfferingStatus.OPEN;
+    //         await this.courseOfferingRepository.save(item);
+    //         updated.push(item.id);
+    //     }
+
+    //     return {
+    //         message:
+    //             updated.length > 0
+    //                 ? `Đã mở đăng ký ${updated.length} lớp học phần`
+    //                 : 'Không có lớp học phần nào được mở đăng ký',
+    //         data: {
+    //             updatedCount: updated.length,
+    //             skippedCount: skipped.length,
+    //             updatedIds: updated,
+    //             skipped,
+    //         },
+    //     };
+    // }
+
     async bulkOpenRegistration(dto: BulkUpdateCourseOfferingStatusDto) {
-        const { ids } = dto;
+        const ids = [
+            ...new Set((dto.ids || []).map((id) => Number(id))),
+        ].filter(Boolean);
+
+        if (!ids.length) {
+            throw new BadRequestException(
+                'Danh sách lớp học phần không hợp lệ',
+            );
+        }
 
         const courseOfferings = await this.courseOfferingRepository.find({
             where: {
                 id: In(ids),
             },
             relations: {
-                schedules: true,
+                schedules: {
+                    room: true,
+                },
                 term: true,
+                teacherSubject: {
+                    subject: true,
+                    teacher: {
+                        user: true,
+                    },
+                },
             },
         });
 
@@ -416,9 +491,25 @@ export class CourseOfferingService {
             throw new NotFoundException('Không tìm thấy lớp học phần nào');
         }
 
-        const updated: number[] = [];
-        const skipped: Array<{ id: number; code?: string; reason: string }> =
-            [];
+        const foundIds = new Set(courseOfferings.map((item) => item.id));
+
+        const updatedIds: number[] = [];
+        const skipped: Array<{
+            id: number;
+            code?: string;
+            reason: string;
+        }> = [];
+
+        for (const id of ids) {
+            if (!foundIds.has(id)) {
+                skipped.push({
+                    id,
+                    reason: 'Không tìm thấy lớp học phần',
+                });
+            }
+        }
+
+        const now = new Date();
 
         for (const item of courseOfferings) {
             if (item.status !== CourseOfferingStatus.WAITING_REGISTRATION) {
@@ -426,6 +517,33 @@ export class CourseOfferingService {
                     id: item.id,
                     code: item.code,
                     reason: 'Chỉ có thể mở đăng ký cho lớp đang ở trạng thái chờ đăng ký',
+                });
+                continue;
+            }
+
+            if (!item.term) {
+                skipped.push({
+                    id: item.id,
+                    code: item.code,
+                    reason: 'Lớp học phần chưa có học kỳ',
+                });
+                continue;
+            }
+
+            if (item.term.startDate && now >= new Date(item.term.startDate)) {
+                skipped.push({
+                    id: item.id,
+                    code: item.code,
+                    reason: 'Không thể mở đăng ký vì học kỳ đã bắt đầu',
+                });
+                continue;
+            }
+
+            if (!item.teacherSubject) {
+                skipped.push({
+                    id: item.id,
+                    code: item.code,
+                    reason: 'Lớp học phần chưa có giảng viên - môn học',
                 });
                 continue;
             }
@@ -439,20 +557,62 @@ export class CourseOfferingService {
                 continue;
             }
 
-            item.status = CourseOfferingStatus.OPEN;
-            await this.courseOfferingRepository.save(item);
-            updated.push(item.id);
+            const invalidSchedule = item.schedules.find(
+                (schedule) =>
+                    !schedule.roomId ||
+                    !schedule.dayOfWeek ||
+                    !schedule.lessonStart ||
+                    !schedule.lessonEnd ||
+                    !schedule.startDate ||
+                    !schedule.endDate,
+            );
+
+            if (invalidSchedule) {
+                skipped.push({
+                    id: item.id,
+                    code: item.code,
+                    reason: 'Lịch học chưa đầy đủ phòng, thứ, tiết hoặc thời gian áp dụng',
+                });
+                continue;
+            }
+
+            const hasInvalidLesson = item.schedules.some(
+                (schedule) =>
+                    Number(schedule.lessonEnd) < Number(schedule.lessonStart),
+            );
+
+            if (hasInvalidLesson) {
+                skipped.push({
+                    id: item.id,
+                    code: item.code,
+                    reason: 'Lịch học có tiết kết thúc nhỏ hơn tiết bắt đầu',
+                });
+                continue;
+            }
+
+            updatedIds.push(item.id);
+        }
+
+        if (updatedIds.length > 0) {
+            await this.courseOfferingRepository.update(
+                {
+                    id: In(updatedIds),
+                },
+                {
+                    status: CourseOfferingStatus.OPEN,
+                },
+            );
         }
 
         return {
             message:
-                updated.length > 0
-                    ? `Đã mở đăng ký ${updated.length} lớp học phần`
+                updatedIds.length > 0
+                    ? `Đã mở đăng ký ${updatedIds.length} lớp học phần`
                     : 'Không có lớp học phần nào được mở đăng ký',
             data: {
-                updatedCount: updated.length,
+                updatedCount: updatedIds.length,
                 skippedCount: skipped.length,
-                updatedIds: updated,
+                updatedIds,
                 skipped,
             },
         };
