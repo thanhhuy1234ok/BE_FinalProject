@@ -8,8 +8,8 @@ export class CreateTeacherSubjectDto {
 }
 
 export class CreateTeacherSubjectManyDto {
-    @IsString()
-    teacherId: string;
+    @IsNumber()
+    teacherId: number;
     @IsArray()
     subjectIds: number[];
 }

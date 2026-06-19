@@ -298,6 +298,7 @@ export class AdminClassService {
                 id: s.id,
                 name: s.user?.name,
                 email: s.user?.email,
+                mssv: s.mssv,
             })),
         };
 

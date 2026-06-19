@@ -7,9 +7,10 @@ import {
 import { CreateTermDto } from './dto/create-term.dto';
 import { UpdateTermDto } from './dto/update-term.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { SemesterEnum, Term } from './entities/term.entity';
+import { Term } from './entities/term.entity';
 import { Repository } from 'typeorm';
 import { buildAqpQueryOptions } from '@/helpers/func/buildAqpOptions';
+import { SemesterEnum } from '@/helpers/enum/enum.global';
 
 @Injectable()
 export class TermsService {
@@ -57,9 +58,9 @@ export class TermsService {
         // }
 
         const prerequisiteMap = {
-            [SemesterEnum.HK1]: null,
+            [SemesterEnum.HK1]: SemesterEnum.HK1,
             [SemesterEnum.HK2]: SemesterEnum.HK1,
-            [SemesterEnum.SUMMER]: SemesterEnum.HK2,
+            [SemesterEnum.SUMMER]: SemesterEnum.SUMMER,
         };
 
         const prerequisiteSemester = prerequisiteMap[semester];
@@ -145,7 +146,7 @@ export class TermsService {
             textSearchFields: [],
             exactFields: ['year', 'semester', 'isActive'],
             ignoreFilters: ['current', 'pageSize'],
-            defaultSort: { createdAt: 'DESC' },
+            defaultSort: { id: 'ASC' },
         });
 
         const totalItems = await this.termsRepository.count({ where });

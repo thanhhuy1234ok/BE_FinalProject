@@ -1,5 +1,5 @@
 import aqp from 'api-query-params';
-import { ILike } from 'typeorm';
+import { FindOperator, ILike } from 'typeorm';
 import type { FindOptionsOrder, FindOptionsWhere } from 'typeorm';
 
 export interface AqpConfigV2 {
@@ -163,14 +163,12 @@ export function buildAqpQueryOptions<T>(
     };
 
     const andTokensForRootField = (field: string, rawVal: string) => {
-        const tokens = splitTokens(rawVal);
-        if (!tokens.length) return;
+        const value = rawVal.trim();
+        if (!value) return;
 
-        for (const t of tokens) {
-            andIntoAllBranches({
-                [field]: ILike(`%${t}%`),
-            });
-        }
+        andIntoAllBranches({
+            [field]: ILike(`%${value}%`),
+        });
     };
 
     const andTokensForRelationField = (
@@ -178,16 +176,14 @@ export function buildAqpQueryOptions<T>(
         relField: string,
         rawVal: string,
     ) => {
-        const tokens = splitTokens(rawVal);
-        if (!tokens.length) return;
+        const value = rawVal.trim();
+        if (!value) return;
 
-        for (const t of tokens) {
-            andIntoAllBranches({
-                [relation]: {
-                    [relField]: ILike(`%${t}%`),
-                },
-            });
-        }
+        andIntoAllBranches({
+            [relation]: {
+                [relField]: ILike(`%${value}%`),
+            },
+        });
     };
 
     // 3) Text search root fields
@@ -294,5 +290,10 @@ function deepMerge(
 }
 
 function isPlainObject(value: unknown): value is Record<string, any> {
-    return typeof value === 'object' && value !== null && !Array.isArray(value);
+    return (
+        typeof value === 'object' &&
+        value !== null &&
+        !Array.isArray(value) &&
+        !(value instanceof FindOperator)
+    );
 }

@@ -93,6 +93,11 @@ export class PaymentController {
         return this.paymentService.bulkUpdateStatus(dto);
     }
 
+    @Get('history')
+    getPaymentHistory(@User() user: IUser) {
+        return this.paymentService.getPaymentHistory(user.id);
+    }
+
     @Public()
     @Get('vnpay/return-url')
     async vnpayReturn(
