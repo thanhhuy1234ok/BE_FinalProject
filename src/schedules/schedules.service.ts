@@ -8,6 +8,7 @@ import { UpdateScheduleDto } from './dto/update-schedule.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Schedule } from './entities/schedule.entity';
 import {
+    Between,
     In,
     IsNull,
     LessThanOrEqual,
@@ -855,35 +856,31 @@ export class SchedulesService {
 
         const { date, from, to } = query;
 
-        let startCheckDate: Date;
-        let endCheckDate: Date;
+        let startCheckDate: string;
+        let endCheckDate: string;
 
         if (date) {
-            startCheckDate = new Date(date);
-            endCheckDate = new Date(date);
+            startCheckDate = date;
+            endCheckDate = date;
         } else if (from && to) {
-            startCheckDate = new Date(from);
-            endCheckDate = new Date(to);
+            startCheckDate = from;
+            endCheckDate = to;
         } else {
-            const now = new Date();
-            startCheckDate = now;
-            endCheckDate = now;
+            const today = new Date().toISOString().slice(0, 10);
+            startCheckDate = today;
+            endCheckDate = today;
         }
 
         if (
-            Number.isNaN(startCheckDate.getTime()) ||
-            Number.isNaN(endCheckDate.getTime())
+            Number.isNaN(new Date(startCheckDate).getTime()) ||
+            Number.isNaN(new Date(endCheckDate).getTime())
         ) {
             throw new BadRequestException('Ngày không hợp lệ');
         }
 
-        const schedules = await this.scheduleRepository.find({
+        const lessons = await this.lessonRepository.find({
             where: {
-                isActive: true,
-
-                // schedule có hiệu lực trong khoảng ngày FE truyền lên
-                startDate: LessThanOrEqual(endCheckDate),
-                endDate: MoreThanOrEqual(startCheckDate),
+                date: Between(startCheckDate, endCheckDate),
 
                 courseOffering: {
                     courseRegistrations: {
@@ -893,7 +890,9 @@ export class SchedulesService {
                 },
             },
             relations: {
-                room: true,
+                schedule: {
+                    room: true,
+                },
                 courseOffering: {
                     adminClass: true,
                     teacherSubject: {
@@ -905,34 +904,36 @@ export class SchedulesService {
                 },
             },
             order: {
-                dayOfWeek: 'ASC',
+                date: 'ASC',
                 lessonStart: 'ASC',
             },
         });
 
-        return schedules.map((s) => ({
-            id: s.id,
+        return lessons.map((lesson) => ({
+            id: lesson.id,
 
-            dayOfWeek: s.dayOfWeek,
-            lessonStart: s.lessonStart,
-            lessonEnd: s.lessonEnd,
+            date: lesson.date,
 
-            startDate: s.startDate,
-            endDate: s.endDate,
+            dayOfWeek: lesson.dayOfWeek,
+            lessonStart: lesson.lessonStart,
+            lessonEnd: lesson.lessonEnd,
+            status: lesson.status,
 
-            roomName: s.room?.name || 'Chưa có phòng',
+            scheduleId: lesson.schedule?.id,
+            roomName: lesson.schedule?.room?.name || 'Chưa có phòng',
 
-            courseOfferingId: s.courseOffering?.id,
-            courseCode: s.courseOffering?.code || '',
+            courseOfferingId: lesson.courseOffering?.id,
+            courseCode: lesson.courseOffering?.code || '',
 
             subjectName:
-                s.courseOffering?.teacherSubject?.subject?.name || 'Môn học',
+                lesson.courseOffering?.teacherSubject?.subject?.name ||
+                'Môn học',
 
             teacherName:
-                s.courseOffering?.teacherSubject?.teacher?.user?.name ||
+                lesson.courseOffering?.teacherSubject?.teacher?.user?.name ||
                 'Đang cập nhật',
 
-            className: s.courseOffering?.adminClass?.name || '',
+            className: lesson.courseOffering?.adminClass?.name || '',
         }));
     }
 

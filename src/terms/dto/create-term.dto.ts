@@ -1,3 +1,4 @@
+import { SemesterEnum } from '@/helpers/enum/enum.global';
 import {
     IsBoolean,
     IsDate,
@@ -10,7 +11,6 @@ import {
     Max,
     Min,
 } from 'class-validator';
-import { SemesterEnum } from '../entities/term.entity';
 
 export class CreateTermDto {
     @IsInt()

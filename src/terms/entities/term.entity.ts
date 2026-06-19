@@ -1,4 +1,5 @@
 import { CourseOffering } from '@/course-offering/entities/course-offering.entity';
+import { SemesterEnum } from '@/helpers/enum/enum.global';
 import {
     Column,
     CreateDateColumn,
@@ -9,11 +10,6 @@ import {
     UpdateDateColumn,
 } from 'typeorm';
 
-export enum SemesterEnum {
-    HK1 = 'HK1',
-    HK2 = 'HK2',
-    SUMMER = 'SUMMER',
-}
 @Entity()
 export class Term {
     @PrimaryGeneratedColumn()

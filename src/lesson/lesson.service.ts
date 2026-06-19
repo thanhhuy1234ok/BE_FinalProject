@@ -190,7 +190,7 @@ export class LessonService {
 
         const student = await this.studentRepo.findOne({
             where: {
-                user: { id: studentUserId },
+                user_id: studentUserId,
             },
             relations: {
                 user: true,

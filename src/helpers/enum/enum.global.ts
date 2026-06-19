@@ -13,6 +13,12 @@ export enum CourseOfferingStatus {
     FINISHED = 'FINISHED',
 }
 
+export enum SemesterEnum {
+    HK1 = 'HK1',
+    HK2 = 'HK2',
+    SUMMER = 'SUMMER',
+}
+
 export enum LessonStatus {
     UPCOMING = 'UPCOMING',
     ONGOING = 'ONGOING',
