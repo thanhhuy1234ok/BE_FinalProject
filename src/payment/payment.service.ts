@@ -878,18 +878,273 @@ export class PaymentService {
             );
         }
 
-        await this.paymentRepo.update(
-            {
-                id: In(ids),
-            },
-            {
-                status,
-                paymentMethod: PaymentMethod.CASH,
-            },
-        );
+        for (const payment of payments) {
+            payment.status = status;
+
+            if (status === PaymentStatus.PAID) {
+                payment.paymentMethod = PaymentMethod.CASH;
+                payment.paidAt = new Date();
+                payment.gatewayResponseCode = '00';
+                payment.transactionRef = `CASH-${payment.id}-${Date.now()}`;
+            }
+
+            await this.paymentRepo.save(payment);
+
+            if (status === PaymentStatus.PAID) {
+                await this.handlePaymentSuccess(payment.id, PaymentMethod.CASH);
+            }
+        }
 
         return {
             message: `Đã cập nhật ${payments.length} hóa đơn`,
         };
+    }
+
+    private async handlePaymentSuccess(
+        paymentId: number,
+        paymentMethod: PaymentMethod,
+    ) {
+        const payment = await this.paymentRepo.findOne({
+            where: { id: paymentId },
+            relations: {
+                student: { user: true },
+                term: true,
+                items: {
+                    courseOffering: {
+                        teacherSubject: {
+                            subject: true,
+                        },
+                    },
+                    registration: true,
+                },
+            },
+        });
+
+        if (!payment) {
+            throw new NotFoundException('Không tìm thấy thông tin thanh toán');
+        }
+
+        const studentName = payment.student?.user?.name || 'Sinh viên';
+        const studentEmail = payment.student?.user?.email;
+        const studentUserId = payment.student?.user?.id;
+
+        const amount = Number(payment.totalAmount).toLocaleString('vi-VN');
+
+        const admins = await this.userRepo.find({
+            where: {
+                role: {
+                    name: 'ADMIN',
+                },
+            },
+            relations: {
+                role: true,
+            },
+        });
+
+        await Promise.all(
+            admins.map((admin) =>
+                this.notificationService.sendToUser(admin.id, {
+                    title: 'Thanh toán thành công',
+                    content: `${studentName} đã thanh toán ${amount} VND`,
+                    type: 'PAYMENT',
+                }),
+            ),
+        );
+
+        if (studentUserId) {
+            for (const item of payment.items || []) {
+                if (item.courseOffering?.id) {
+                    await this.chatAppService.openCourseConversationForStudent(
+                        item.courseOffering.id,
+                        studentUserId,
+                    );
+                }
+            }
+        }
+
+        for (const item of payment.items || []) {
+            const registrationId = item.registration?.id;
+
+            if (!registrationId) continue;
+
+            const existedGrade = await this.gradeRepo.findOne({
+                where: { registrationId },
+            });
+
+            if (existedGrade) continue;
+
+            const grade = this.gradeRepo.create({
+                registrationId,
+                attendanceScore: 0,
+                midtermScore: 0,
+                finalScore: 0,
+                totalScore: 0,
+                letterGrade: null,
+                isPassed: false,
+                isPublished: false,
+            });
+
+            await this.gradeRepo.save(grade);
+        }
+
+        if (studentEmail) {
+            await this.mailerService.sendPaymentSuccessMail({
+                to: studentEmail,
+                studentName,
+                paymentCode: payment.code,
+                transactionRef:
+                    payment.transactionRef || 'Thanh toán trực tiếp',
+                paymentMethod:
+                    paymentMethod === PaymentMethod.VNPAY
+                        ? 'VNPay'
+                        : 'Tiền mặt',
+                termName: `${payment.term.semester} - ${payment.term.year}`,
+                paidAt: new Intl.DateTimeFormat('vi-VN', {
+                    dateStyle: 'short',
+                    timeStyle: 'short',
+                    timeZone: 'Asia/Ho_Chi_Minh',
+                }).format(payment.paidAt ?? new Date()),
+                totalCredits: payment.totalCredits,
+                totalAmount: formatCurrency(payment.totalAmount),
+                items: payment.items.map((item) => ({
+                    subjectName:
+                        item.courseOffering?.teacherSubject?.subject?.name ||
+                        'Không xác định',
+                    subjectCode:
+                        item.courseOffering?.teacherSubject?.subject?.code ||
+                        'N/A',
+                    credits: item.credits,
+                    unitPrice: formatCurrency(item.unitPrice),
+                    amount: formatCurrency(item.amount),
+                })),
+            });
+        }
+    }
+
+    async getPaymentHistory(userId: string) {
+        const student = await this.studentRepo.findOne({
+            where: {
+                user: {
+                    id: userId,
+                },
+            },
+        });
+
+        if (!student) {
+            throw new NotFoundException('Không tìm thấy sinh viên');
+        }
+
+        const payments = await this.paymentRepo.find({
+            where: {
+                studentId: student.id,
+                status: PaymentStatus.PAID,
+            },
+            relations: {
+                term: true,
+                items: {
+                    registration: {
+                        courseOffering: {
+                            term: true,
+                            adminClass: true,
+                            schedules: {
+                                room: true,
+                            },
+                            teacherSubject: {
+                                teacher: {
+                                    user: true,
+                                },
+                                subject: true,
+                            },
+                        },
+                    },
+                    courseOffering: {
+                        term: true,
+                        adminClass: true,
+                        schedules: {
+                            room: true,
+                        },
+                        teacherSubject: {
+                            teacher: {
+                                user: true,
+                            },
+                            subject: true,
+                        },
+                    },
+                },
+            },
+            order: {
+                createdAt: 'DESC',
+            },
+        });
+
+        return payments.map((payment) => ({
+            id: payment.id,
+            code: payment.code,
+            status: payment.status,
+            paymentMethod: payment.paymentMethod,
+            totalCredits: Number(payment.totalCredits || 0),
+            totalAmount: Number(payment.totalAmount || 0),
+            dueDate: payment.dueDate,
+            paidAt: payment.paidAt,
+            createdAt: payment.createdAt,
+
+            term: payment.term
+                ? {
+                      id: payment.term.id,
+                      year: payment.term.year,
+                      semester: payment.term.semester,
+                      startDate: payment.term.startDate,
+                      endDate: payment.term.endDate,
+                      isActive: payment.term.isActive,
+                  }
+                : null,
+
+            items:
+                payment.items?.map((item) => {
+                    const courseOffering =
+                        item.courseOffering ||
+                        item.registration?.courseOffering;
+
+                    const subject =
+                        courseOffering?.teacherSubject?.subject || null;
+
+                    const teacher =
+                        courseOffering?.teacherSubject?.teacher || null;
+
+                    return {
+                        id: item.id,
+                        credits: Number(item.credits || subject?.credit || 0),
+                        unitPrice: Number(item.unitPrice || 0),
+                        amount: Number(item.amount || 0),
+
+                        subject: subject
+                            ? {
+                                  id: subject.id,
+                                  code: subject.code,
+                                  name: subject.name,
+                                  credit: subject.credit,
+                              }
+                            : null,
+
+                        teacher: teacher
+                            ? {
+                                  id: teacher.id,
+                                  fullName: teacher.user?.name,
+                                  email: teacher.user?.email,
+                              }
+                            : null,
+
+                        courseOffering: courseOffering
+                            ? {
+                                  id: courseOffering.id,
+                                  code: courseOffering.code,
+                                  status: courseOffering.status,
+                                  adminClass: courseOffering.adminClass,
+                                  schedules: courseOffering.schedules,
+                              }
+                            : null,
+                    };
+                }) || [],
+        }));
     }
 }

@@ -26,6 +26,7 @@ import { AdminClass } from '@/admin-class/entities/admin-class.entity';
 import { Department } from '@/departments/entities/department.entity';
 import {
     AdminClassStatus,
+    LESSON_TIME_MAP,
     RegistrationStatus,
 } from '@/helpers/enum/enum.global';
 import { CourseOffering } from '@/course-offering/entities/course-offering.entity';
@@ -35,6 +36,7 @@ import { CourseRegistration } from '@/course-registration/entities/course-regist
 import dayjs from 'dayjs';
 import { Curriculum } from '@/curriculum/entities/curriculum.entity';
 import { CurriculumSubject } from '@/curriculum_subjects/entities/curriculum_subject.entity';
+import { Lesson } from '@/lesson/entities/lesson.entity';
 
 @Injectable()
 export class UsersService {
@@ -77,6 +79,9 @@ export class UsersService {
 
         @InjectRepository(CurriculumSubject)
         private readonly curriculumSubjectRepository: Repository<CurriculumSubject>,
+
+        @InjectRepository(Lesson)
+        private readonly lessonRepository: Repository<Lesson>,
 
         private readonly dataSource: DataSource,
     ) {}
@@ -291,6 +296,8 @@ export class UsersService {
             query.get('role.name') ||
             query.get('role') ||
             query.get('roleName');
+
+        delete (where as any).role;
 
         if (roleName) {
             finalWhere.role = {
@@ -808,7 +815,7 @@ export class UsersService {
                             name,
                             email,
                             password: hashedPassword,
-                            gender: item.gender,
+                            gender: item.gender?.toLocaleUpperCase(),
                             phone: item.phone?.trim(),
                             role_id: studentRole.id,
                         });
@@ -1405,50 +1412,83 @@ export class UsersService {
 
     async getTodaySchedules(userId: string) {
         const student = await this.getStudentByUserId(userId);
-        const registrations = await this.getActiveRegistrations(student.id);
 
-        const today = dayjs();
+        const today = dayjs().format('YYYY-MM-DD');
 
-        /**
-         * Nếu DB của bạn lưu:
-         * Thứ 2 = 2, Thứ 3 = 3, ..., Chủ nhật = 8
-         */
-        const currentDayOfWeek = today.day() === 0 ? 8 : today.day() + 1;
-
-        const result = registrations.flatMap((registration) => {
-            const courseOffering = registration.courseOffering;
-
-            return (courseOffering?.schedules || [])
-                .filter((schedule) => schedule.dayOfWeek === currentDayOfWeek)
-                .map((schedule) => {
-                    const start = this.getLessonTime(
-                        schedule.lessonStart,
-                    )?.start;
-
-                    const end = this.getLessonTime(schedule.lessonEnd)?.end;
-
-                    return {
-                        id: schedule.id,
-                        courseOfferingId: courseOffering.id,
-                        subject:
-                            courseOffering.teacherSubject?.subject?.name || '',
-                        code: courseOffering.code,
-                        className:
-                            courseOffering.adminClass?.name ||
-                            courseOffering.code,
-                        teacher:
-                            courseOffering.teacherSubject?.teacher?.user
-                                ?.name || 'Chưa có giảng viên',
-                        room: schedule.room?.name || 'Chưa có phòng',
-                        time: `${start || '--:--'} - ${end || '--:--'}`,
-                        status: this.getScheduleStatus(start, end),
-                    };
-                });
+        const lessons = await this.lessonRepository.find({
+            where: {
+                date: today,
+                courseOffering: {
+                    courseRegistrations: {
+                        student: { id: student.id },
+                        status: RegistrationStatus.REGISTERED,
+                    },
+                },
+            },
+            relations: {
+                schedule: {
+                    room: true,
+                },
+                courseOffering: {
+                    adminClass: true,
+                    teacherSubject: {
+                        subject: true,
+                        teacher: {
+                            user: true,
+                        },
+                    },
+                },
+            },
+            order: {
+                date: 'ASC',
+            },
         });
 
-        return result.sort((a, b) => a.time.localeCompare(b.time));
-    }
+        const result = lessons.map((lesson) => {
+            const schedule = lesson.schedule;
+            const courseOffering = lesson.courseOffering;
 
+            const start = this.getLessonTime(schedule?.lessonStart)?.start;
+            const end = this.getLessonTime(schedule?.lessonEnd)?.end;
+
+            return {
+                id: lesson.id,
+                lessonId: lesson.id,
+                scheduleId: schedule?.id,
+
+                date: lesson.date,
+                status: lesson.status,
+
+                courseOfferingId: courseOffering.id,
+
+                subject: courseOffering.teacherSubject?.subject?.name || '',
+
+                code: courseOffering.code,
+
+                className:
+                    courseOffering.adminClass?.name || courseOffering.code,
+
+                teacher:
+                    courseOffering.teacherSubject?.teacher?.user?.name ||
+                    'Chưa có giảng viên',
+
+                room: schedule?.room?.name || 'Chưa có phòng',
+
+                lessonStart: schedule?.lessonStart,
+                lessonEnd: schedule?.lessonEnd,
+
+                time: `${start || '--:--'} - ${end || '--:--'}`,
+
+                timeStatus: this.getScheduleStatus(start, end),
+            };
+        });
+
+        return result.sort((a: any, b: any) => {
+            const aStart = a.lessonStart ?? 0;
+            const bStart = b.lessonStart ?? 0;
+            return aStart - bStart;
+        });
+    }
     async getCourseProgress(userId: string) {
         const student = await this.getStudentByUserId(userId);
         const registrations = await this.getActiveRegistrations(student.id);
@@ -1587,21 +1627,6 @@ export class UsersService {
     }
 
     private getLessonTime(lesson: number) {
-        const LESSON_TIME_MAP: Record<number, { start: string; end: string }> =
-            {
-                1: { start: '07:00', end: '07:50' },
-                2: { start: '07:50', end: '08:40' },
-                3: { start: '08:50', end: '09:40' },
-                4: { start: '09:40', end: '10:30' },
-                5: { start: '10:40', end: '11:30' },
-                6: { start: '13:00', end: '13:50' },
-                7: { start: '13:50', end: '14:40' },
-                8: { start: '14:50', end: '15:40' },
-                9: { start: '15:40', end: '16:30' },
-                10: { start: '19:55', end: '20:30' },
-                11: { start: '20:30', end: '21:20' },
-            };
-
         return LESSON_TIME_MAP[lesson];
     }
 
@@ -1652,6 +1677,11 @@ export class UsersService {
                     id: userId,
                 },
             },
+            relations: {
+                teacherSubjects: {
+                    subject: true,
+                },
+            },
         });
 
         if (!teacher) {
@@ -1678,24 +1708,28 @@ export class UsersService {
             },
         });
 
-        return courses.map((item) => ({
-            id: item.id,
-            code: item.code,
+        return {
+            teacherSubjects:
+                teacher.teacherSubjects?.map((item) => ({
+                    id: item.id,
+                    subjectId: item.subject?.id,
+                    subjectName: item.subject?.name || 'N/A',
+                    subjectCode: item.subject?.code || 'N/A',
+                    credit: item.subject?.credit || 0,
+                })) || [],
 
-            subjectName: item.teacherSubject?.subject?.name || 'N/A',
-
-            subjectCode: item.teacherSubject?.subject?.code || 'N/A',
-
-            credit: item.teacherSubject?.subject?.credit || 0,
-
-            termName: item.term?.semester || 'N/A',
-
-            year: item.term?.year || 0,
-
-            status: item.status,
-
-            totalStudents: item.courseRegistrations?.length || 0,
-        }));
+            courses: courses.map((item) => ({
+                id: item.id,
+                code: item.code,
+                subjectName: item.teacherSubject?.subject?.name || 'N/A',
+                subjectCode: item.teacherSubject?.subject?.code || 'N/A',
+                credit: item.teacherSubject?.subject?.credit || 0,
+                termName: item.term?.semester || 'N/A',
+                year: item.term?.year || 0,
+                status: item.status,
+                totalStudents: item.courseRegistrations?.length || 0,
+            })),
+        };
     }
 
     async getStudentLearningOverview(userId: string) {

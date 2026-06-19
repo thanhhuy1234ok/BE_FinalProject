@@ -20,12 +20,12 @@ export class TeacherSubject {
     id: number;
 
     @Column()
-    teacherId: string;
+    teacherId: number;
 
     @ManyToOne(() => Teacher, (t) => t.teacherSubjects, {
         onDelete: 'CASCADE',
     })
-    @JoinColumn({ name: 'teacherId', referencedColumnName: 'user_id' })
+    @JoinColumn({ name: 'teacherId' })
     teacher: Teacher;
 
     @Column({ type: 'int' })

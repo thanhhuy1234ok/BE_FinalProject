@@ -238,143 +238,6 @@ export class CourseRegistrationService {
         });
     }
 
-    // async getOpenOfferings(studentUserId: string) {
-    //     const student = await this.studentRepo.findOne({
-    //         where: { user: { id: studentUserId } },
-    //     });
-
-    //     if (!student) {
-    //         throw new NotFoundException('Không tìm thấy sinh viên');
-    //     }
-
-    //     // const activeTerm = await this.termRepo.findOne({
-    //     //     where: { isActive: true },
-    //     // });
-
-    //     // if (!activeTerm) {
-    //     //     return {
-    //     //         message: 'Hiện chưa có học kỳ nào đang mở',
-    //     //         data: [],
-    //     //     };
-    //     // }
-
-    //     const offerings = await this.courseOfferingRepo.find({
-    //         where: {
-    //             // term: { id: activeTerm.id },
-    //             status: CourseOfferingStatus.OPEN,
-    //         },
-    //         relations: {
-    //             term: true,
-    //             teacherSubject: {
-    //                 teacher: {
-    //                     user: true,
-    //                 },
-    //                 subject: true,
-    //             },
-    //             schedules: {
-    //                 room: true,
-    //             },
-    //         },
-    //         order: {
-    //             id: 'DESC',
-    //         },
-    //     });
-
-    //     const offeringIds = offerings.map((item) => item.id);
-
-    //     if (!offeringIds.length) {
-    //         return {
-    //             message: 'Không có lớp học phần nào đang mở',
-    //             data: [],
-    //         };
-    //     }
-
-    //     const registeredRows = await this.registrationRepo.find({
-    //         where: {
-    //             studentId: student.id,
-    //             status: RegistrationStatus.REGISTERED,
-    //         },
-    //         relations: {
-    //             courseOffering: {
-    //                 teacherSubject: {
-    //                     subject: true,
-    //                 },
-    //             },
-    //         },
-    //     });
-
-    //     const registeredOfferingSet = new Set(
-    //         registeredRows.map((item) => item.courseOfferingId),
-    //     );
-
-    //     const registeredSubjectSet = new Set(
-    //         registeredRows
-    //             .map((item) => item.courseOffering?.teacherSubject?.subject?.id)
-    //             .filter(Boolean),
-    //     );
-
-    //     const counts = await this.registrationRepo
-    //         .createQueryBuilder('registration')
-    //         .select('registration.courseOfferingId', 'courseOfferingId')
-    //         .addSelect('COUNT(registration.id)', 'total')
-    //         .where('registration.courseOfferingId IN (:...offeringIds)', {
-    //             offeringIds,
-    //         })
-    //         .andWhere('registration.status = :status', {
-    //             status: RegistrationStatus.REGISTERED,
-    //         })
-    //         .groupBy('registration.courseOfferingId')
-    //         .getRawMany();
-
-    //     const countMap = new Map<number, number>();
-
-    //     counts.forEach((item) => {
-    //         countMap.set(Number(item.courseOfferingId), Number(item.total));
-    //     });
-
-    //     const data = offerings.map((offering) => {
-    //         const registeredCount = countMap.get(offering.id) || 0;
-    //         const maxStudents = offering.maxStudents || 0;
-    //         const subjectId = offering.teacherSubject?.subject?.id;
-
-    //         const isRegistered = registeredOfferingSet.has(offering.id);
-
-    //         const isSameSubjectRegistered =
-    //             !!subjectId &&
-    //             registeredSubjectSet.has(subjectId) &&
-    //             !isRegistered;
-
-    //         const isFull =
-    //             maxStudents > 0 ? registeredCount >= maxStudents : false;
-
-    //         return {
-    //             id: offering.id,
-    //             code: offering.code,
-    //             term: offering.term,
-    //             subject: offering.teacherSubject?.subject,
-    //             teacher: offering.teacherSubject?.teacher,
-    //             schedules: offering.schedules,
-
-    //             credits: offering.teacherSubject?.subject?.credit,
-    //             maxStudents,
-    //             registeredCount,
-    //             remainingSlots:
-    //                 maxStudents > 0 ? maxStudents - registeredCount : null,
-
-    //             isRegistered,
-    //             isSameSubjectRegistered,
-    //             isFull,
-    //             canRegister:
-    //                 !isRegistered && !isSameSubjectRegistered && !isFull,
-    //         };
-    //     });
-
-    //     return {
-    //         message: 'Lấy danh sách lớp học phần đang mở thành công',
-    //         data,
-    //     };
-    // }
-
     async getOpenOfferings(studentUserId: string) {
         const student = await this.studentRepo.findOne({
             where: {
@@ -383,6 +246,7 @@ export class CourseRegistrationService {
                 },
             },
             relations: {
+                user: true,
                 major: true,
                 yearOfAdmission: true,
             },
@@ -392,26 +256,44 @@ export class CourseRegistrationService {
             throw new NotFoundException('Không tìm thấy sinh viên');
         }
 
-        const activeTerm = await this.termRepo.findOne({
-            where: {
-                isActive: true,
-            },
-        });
+        const isDemoUser =
+            student.user?.email === 'nguyenvothanhhuy2002@gmail.com';
+
+        const activeTerm = isDemoUser
+            ? await this.termRepo.findOne({
+                  where: {
+                      id: 18,
+                  },
+              })
+            : await this.termRepo.findOne({
+                  where: {
+                      isActive: true,
+                  },
+              });
 
         if (!activeTerm) {
             return {
-                message: 'Hiện chưa có học kỳ nào đang mở',
+                message: isDemoUser
+                    ? 'Không tìm thấy học kỳ demo id = 18'
+                    : 'Hiện chưa có học kỳ nào đang mở',
                 data: [],
             };
         }
 
-        const offerings = await this.courseOfferingRepo.find({
-            where: {
-                term: {
-                    id: activeTerm.id,
-                },
-                status: CourseOfferingStatus.OPEN,
+        const where: any = {
+            term: {
+                id: activeTerm.id,
             },
+        };
+
+        // User thường: chỉ hiện lớp OPEN
+        // Demo user: hiện tất cả lớp của học kỳ 18, không cần term active
+        if (!isDemoUser) {
+            where.status = CourseOfferingStatus.OPEN;
+        }
+
+        const offerings = await this.courseOfferingRepo.find({
+            where,
             relations: {
                 term: true,
                 teacherSubject: {
@@ -434,8 +316,9 @@ export class CourseRegistrationService {
 
         if (!offeringIds.length) {
             return {
-                message:
-                    'Không có lớp học phần nào đang mở trong học kỳ hiện tại',
+                message: isDemoUser
+                    ? 'Demo user chưa có lớp học phần nào trong học kỳ 18'
+                    : 'Không có lớp học phần nào đang mở trong học kỳ hiện tại',
                 data: [],
             };
         }
@@ -471,7 +354,7 @@ export class CourseRegistrationService {
         const registeredSubjectSet = new Set(
             registeredRows
                 .map((item) => item.courseOffering?.teacherSubject?.subject?.id)
-                .filter(Boolean),
+                .filter((id): id is number => !!id),
         );
 
         const counts = await this.registrationRepo
@@ -497,23 +380,26 @@ export class CourseRegistrationService {
             countMap.set(Number(item.courseOfferingId), Number(item.total));
         });
 
-        const curriculumSubjects = subjectIds.length
-            ? await this.curriculumSubjectRepo
-                  .createQueryBuilder('cs')
-                  .leftJoinAndSelect('cs.curriculum', 'curriculum')
-                  .leftJoinAndSelect('cs.subject', 'subject')
-                  .where('subject.id IN (:...subjectIds)', { subjectIds })
-                  .andWhere('curriculum.major_id = :majorId', {
-                      majorId: student.major_id,
-                  })
-                  .andWhere(
-                      'curriculum.year_of_admission_id = :yearOfAdmissionId',
-                      {
-                          yearOfAdmissionId: student.yearOfAdmissionId,
-                      },
-                  )
-                  .getMany()
-            : [];
+        let curriculumSubjects: any[] = [];
+
+        // Demo user bỏ lọc chương trình đào tạo
+        if (!isDemoUser && subjectIds.length) {
+            curriculumSubjects = await this.curriculumSubjectRepo
+                .createQueryBuilder('cs')
+                .leftJoinAndSelect('cs.curriculum', 'curriculum')
+                .leftJoinAndSelect('cs.subject', 'subject')
+                .where('subject.id IN (:...subjectIds)', { subjectIds })
+                .andWhere('curriculum.major_id = :majorId', {
+                    majorId: student.major_id,
+                })
+                .andWhere(
+                    'curriculum.year_of_admission_id = :yearOfAdmissionId',
+                    {
+                        yearOfAdmissionId: student.yearOfAdmissionId,
+                    },
+                )
+                .getMany();
+        }
 
         const curriculumSubjectMap = new Map<number, any>();
 
@@ -526,6 +412,7 @@ export class CourseRegistrationService {
         const data = offerings.map((offering) => {
             const registeredCount = countMap.get(offering.id) || 0;
             const maxStudents = offering.maxStudents || 0;
+
             const subject = offering.teacherSubject?.subject;
             const subjectId = subject?.id;
 
@@ -533,9 +420,10 @@ export class CourseRegistrationService {
                 ? curriculumSubjectMap.get(subjectId)
                 : null;
 
-            const isRequired =
-                curriculumSubject?.isRequired === true ||
-                curriculumSubject?.type === 'REQUIRED';
+            const isRequired = isDemoUser
+                ? false
+                : curriculumSubject?.isRequired === true ||
+                  curriculumSubject?.type === 'REQUIRED';
 
             const isRegistered = registeredOfferingSet.has(offering.id);
 
@@ -550,6 +438,7 @@ export class CourseRegistrationService {
             return {
                 id: offering.id,
                 code: offering.code,
+                status: offering.status,
                 term: offering.term,
                 teacher: offering.teacherSubject?.teacher,
                 schedules: offering.schedules,
@@ -573,8 +462,11 @@ export class CourseRegistrationService {
                 isRegistered,
                 isSameSubjectRegistered,
                 isFull,
+
                 canRegister:
                     !isRegistered && !isSameSubjectRegistered && !isFull,
+
+                isDemoUser,
             };
         });
 
@@ -589,15 +481,27 @@ export class CourseRegistrationService {
         dto: CheckCourseRegistrationConflictDto,
     ) {
         const student = await this.studentRepo.findOne({
-            where: { user: { id: studentUserId } },
+            where: {
+                user: {
+                    id: studentUserId,
+                },
+            },
+            relations: {
+                user: true,
+            },
         });
 
         if (!student) {
             throw new NotFoundException('Không tìm thấy sinh viên');
         }
 
+        const isDemoUser =
+            student.user?.email === 'nguyenvothanhhuy2002@gmail.com';
+
         const courseOffering = await this.courseOfferingRepo.findOne({
-            where: { id: dto.courseOfferingId },
+            where: {
+                id: dto.courseOfferingId,
+            },
             relations: {
                 term: true,
                 schedules: true,
@@ -611,11 +515,29 @@ export class CourseRegistrationService {
             throw new NotFoundException('Không tìm thấy lớp học phần');
         }
 
+        // Demo user chỉ cho check đăng ký trong học kỳ 18
+        if (isDemoUser && courseOffering.term?.id !== 18) {
+            return {
+                canRegister: false,
+                isConflict: true,
+                reason: 'NOT_DEMO_TERM',
+                message: 'Demo chỉ cho đăng ký môn học kỳ 18',
+                conflictCourseOffering: null,
+            };
+        }
+
+        const currentTermId = courseOffering.term?.id;
+
         const existed = await this.registrationRepo.findOne({
             where: {
                 studentId: student.id,
                 courseOfferingId: dto.courseOfferingId,
                 status: RegistrationStatus.REGISTERED,
+                courseOffering: {
+                    term: {
+                        id: currentTermId,
+                    },
+                },
             },
         });
 
@@ -633,6 +555,11 @@ export class CourseRegistrationService {
             where: {
                 courseOfferingId: dto.courseOfferingId,
                 status: RegistrationStatus.REGISTERED,
+                courseOffering: {
+                    term: {
+                        id: currentTermId,
+                    },
+                },
             },
         });
 
@@ -653,9 +580,15 @@ export class CourseRegistrationService {
             where: {
                 studentId: student.id,
                 status: RegistrationStatus.REGISTERED,
+                courseOffering: {
+                    term: {
+                        id: currentTermId,
+                    },
+                },
             },
             relations: {
                 courseOffering: {
+                    term: true,
                     schedules: true,
                     teacherSubject: {
                         subject: true,
@@ -674,8 +607,12 @@ export class CourseRegistrationService {
             selectedCourses = await this.courseOfferingRepo.find({
                 where: {
                     id: In(selectedIds),
+                    term: {
+                        id: currentTermId,
+                    },
                 },
                 relations: {
+                    term: true,
                     schedules: true,
                     teacherSubject: {
                         subject: true,
@@ -684,20 +621,38 @@ export class CourseRegistrationService {
             });
         }
 
+        const currentSubjectId = courseOffering.teacherSubject?.subject?.id;
+
         const coursesToCheck = [
-            ...registeredCourses.map((r) => r.courseOffering),
+            ...registeredCourses.map((r) => r.courseOffering).filter(Boolean),
             ...selectedCourses,
         ];
 
         for (const oldCourse of coursesToCheck) {
-            for (const oldSchedule of oldCourse.schedules) {
-                for (const newSchedule of courseOffering.schedules) {
+            const oldSubjectId = oldCourse.teacherSubject?.subject?.id;
+
+            if (currentSubjectId && oldSubjectId === currentSubjectId) {
+                return {
+                    canRegister: false,
+                    isConflict: true,
+                    reason: 'SAME_SUBJECT_REGISTERED',
+                    message: `Bạn đã chọn hoặc đăng ký môn ${oldCourse.teacherSubject.subject.name} trong học kỳ này`,
+                    conflictCourseOffering: {
+                        id: oldCourse.id,
+                        subject: oldCourse.teacherSubject.subject,
+                        schedules: oldCourse.schedules,
+                    },
+                };
+            }
+
+            for (const oldSchedule of oldCourse.schedules || []) {
+                for (const newSchedule of courseOffering.schedules || []) {
                     const sameDay =
                         oldSchedule.dayOfWeek === newSchedule.dayOfWeek;
 
                     const conflictTime =
-                        oldSchedule.lessonStart < newSchedule.lessonEnd &&
-                        newSchedule.lessonStart < oldSchedule.lessonEnd;
+                        oldSchedule.lessonStart <= newSchedule.lessonEnd &&
+                        newSchedule.lessonStart <= oldSchedule.lessonEnd;
 
                     if (sameDay && conflictTime) {
                         return {
@@ -720,7 +675,9 @@ export class CourseRegistrationService {
             canRegister: true,
             isConflict: false,
             reason: null,
-            message: 'Có thể đăng ký lớp học phần này',
+            message: isDemoUser
+                ? 'Demo user có thể đăng ký lớp học phần học kỳ 18'
+                : 'Có thể đăng ký lớp học phần này',
             conflictCourseOffering: null,
         };
     }

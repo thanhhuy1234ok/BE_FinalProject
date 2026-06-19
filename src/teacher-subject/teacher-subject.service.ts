@@ -68,7 +68,7 @@ export class TeacherSubjectService {
         const uniqueSubjectIds = [...new Set(subjectIds)];
 
         const teacher = await this.teacherRepo.findOne({
-            where: { user_id: teacherId },
+            where: { id: teacherId },
         });
 
         if (!teacher) {
@@ -107,8 +107,8 @@ export class TeacherSubjectService {
 
         const existing = await this.teacherSubRepo.find({
             where: {
-                teacherId,
                 subjectId: In(uniqueSubjectIds),
+                teacherId: teacher.id,
             },
         });
 
@@ -126,7 +126,7 @@ export class TeacherSubjectService {
 
         const entities = newSubjectIds.map((subjectId) =>
             this.teacherSubRepo.create({
-                teacherId,
+                teacherId: teacher.id,
                 subjectId,
             }),
         );
@@ -136,7 +136,7 @@ export class TeacherSubjectService {
         return {
             message: 'Gán môn học cho giáo viên thành công',
             data: {
-                teacherId,
+                teacherId: teacher.id,
                 insertedCount: saved.length,
                 insertedSubjectIds: newSubjectIds,
                 skippedSubjectIds: existingSubjectIds,
