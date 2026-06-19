@@ -570,7 +570,7 @@ export class LessonService {
             throw new NotFoundException('Không tìm thấy buổi học');
         }
 
-        await this.syncLessonStatus(lesson);
+        // await this.syncLessonStatus(lesson);
 
         return {
             result: {
