@@ -451,7 +451,7 @@ export class LessonService {
         };
     }
 
-    @Cron('*/30 * * * *')
+    // @Cron('*/30 * * * *')
     async updateLessonStatusCron() {
         await this.updateLessonStatuses();
     }
